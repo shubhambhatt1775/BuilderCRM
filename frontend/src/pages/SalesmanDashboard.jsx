@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, MessageSquare } from 'lucide-react';
 
 const SalesmanDashboard = () => {
-    const { token, user } = useAuth();
+    const { token, user, logout } = useAuth();
     const [leads, setLeads] = useState([]);
     const [todayFollowups, setTodayFollowups] = useState([]);
     const [showReminder, setShowReminder] = useState(false);
@@ -19,9 +19,10 @@ const SalesmanDashboard = () => {
     const [viewMessage, setViewMessage] = useState(null);
 
     useEffect(() => {
+        if (!token) return;
         fetchLeads();
         fetchTodayFollowups();
-    }, []);
+    }, [token]);
 
     const fetchLeads = async () => {
         try {
@@ -31,6 +32,9 @@ const SalesmanDashboard = () => {
             setLeads(res.data);
         } catch (error) {
             console.error('Error fetching leads:', error);
+            if (error.response?.status === 401) {
+                logout();
+            }
         }
     };
 
@@ -47,6 +51,9 @@ const SalesmanDashboard = () => {
             }
         } catch (error) {
             console.error('Error fetching followups:', error);
+            if (error.response?.status === 401) {
+                logout();
+            }
         }
     };
 
@@ -63,7 +70,11 @@ const SalesmanDashboard = () => {
             alert('Lead status successfully updated!');
         } catch (error) {
             console.error(error);
-            alert('Failed to update status.');
+            if (error.response?.status === 401) {
+                logout();
+            } else {
+                alert('Failed to update status.');
+            }
         }
     };
 
@@ -136,62 +147,92 @@ const SalesmanDashboard = () => {
 
             <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left table-auto">
                         <thead>
-                            <tr className="bg-gray-50/50 text-xs text-gray-400 font-black uppercase tracking-widest">
-                                <th className="p-6">Client Profile</th>
-                                <th className="p-6">Requirement</th>
-                                <th className="p-6">Current Status</th>
-                                <th className="p-6 text-center">Operation</th>
+                            <tr className="bg-gray-50/50 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100">
+                                <th className="px-6 py-4">Client Profile</th>
+                                <th className="px-6 py-4">Contact Details</th>
+                                <th className="px-6 py-4">Requirement</th>
+                                <th className="px-6 py-4">Current Status</th>
+                                <th className="px-6 py-4 text-center">Operation</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredLeads.length === 0 ? (
                                 <tr>
-                                    <td colSpan="4" className="p-20 text-center text-gray-300 italic">No {activeTab} leads available.</td>
+                                    <td colSpan="5" className="px-6 py-12 text-center text-gray-300 italic font-medium">No {activeTab} leads available for processing.</td>
                                 </tr>
                             ) : filteredLeads.map(lead => (
-                                <tr key={lead.id} className="hover:bg-blue-50/30 transition-all group">
-                                    <td className="p-6">
-                                        <div className="flex items-center space-x-4">
-                                            <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center text-blue-600 font-black text-xl">
+                                <tr key={lead.id} className="hover:bg-blue-50/20 transition-all group">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-600 font-black text-lg">
                                                 {lead.sender_name?.[0] || 'A'}
                                             </div>
                                             <div>
-                                                <div className="font-extrabold text-gray-900">{lead.sender_name || 'Anonymous User'}</div>
-                                                <div className="text-sm text-gray-400 group-hover:text-blue-500 transition-colors">{lead.sender_email}</div>
+                                                <div className="font-extrabold text-gray-900 text-sm">{lead.sender_name || 'Anonymous User'}</div>
+                                                <div className="text-xs text-gray-400">{lead.sender_email}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="p-6 max-w-xs">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center space-x-2">
+                                            {lead.phone ? (
+                                                <a href={`tel:${lead.phone}`} className="font-black text-gray-900 text-sm hover:text-blue-600 transition-colors flex items-center space-x-1.5">
+                                                    <Phone size={12} className="text-gray-400" />
+                                                    <span>{lead.phone}</span>
+                                                </a>
+                                            ) : (
+                                                <span className="text-gray-400 font-bold text-sm italic">Not Provided</span>
+                                            )}
+                                            {lead.phone && (
+                                                <a
+                                                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-emerald-500 hover:text-emerald-600 transition-colors"
+                                                >
+                                                    <MessageSquare size={14} />
+                                                </a>
+                                            )}
+                                        </div>
+                                        <div className="mt-1">
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                    'bg-gray-50 text-gray-400 border border-gray-100'
+                                                }`}>
+                                                WA: {lead.whatsapp_status}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 max-w-xs">
                                         <div
                                             onClick={() => setViewMessage(lead)}
-                                            className="cursor-pointer hover:bg-gray-50 p-3 rounded-2xl transition-all border border-transparent hover:border-blue-100 group/msg"
+                                            className="cursor-pointer hover:bg-gray-100 p-2 rounded-xl transition-all border border-transparent hover:border-blue-100 group/msg"
                                         >
-                                            <div className="font-bold text-xs text-gray-400 mb-1 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
-                                            <div className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{lead.body}</div>
-                                            <div className="mt-2 text-[10px] font-bold text-blue-500 opacity-0 group-hover/msg:opacity-100 flex items-center space-x-1">
-                                                <MessageSquare size={10} />
-                                                <span>Click to read full message</span>
-                                            </div>
+                                            <div className="font-bold text-[10px] text-gray-400 mb-0.5 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
+                                            <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
                                         </div>
                                     </td>
-                                    <td className="p-6">
-                                        <span className={`status-badge status-${lead.status.toLowerCase().replace(' ', '-')}`}>
+                                    <td className="px-6 py-4">
+                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
+                                                    'bg-blue-50 text-blue-700 ring-blue-700/10'
+                                            }`}>
                                             {lead.status}
                                         </span>
                                     </td>
-                                    <td className="p-6">
+                                    <td className="px-6 py-4">
                                         <div className="flex justify-center">
                                             <button
                                                 onClick={() => {
                                                     setSelectedLead(lead);
                                                     setStatusUpdate({ ...statusUpdate, status: lead.status });
                                                 }}
-                                                className="bg-gray-50 text-gray-900 px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-blue-600 hover:text-white transition-all transform group-hover:scale-105 shadow-sm flex items-center space-x-2"
+                                                className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
                                             >
-                                                <ExternalLink size={14} />
-                                                <span>Handle Lead</span>
+                                                <ExternalLink size={12} />
+                                                <span>Update</span>
                                             </button>
                                         </div>
                                     </td>

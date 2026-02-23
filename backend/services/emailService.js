@@ -59,6 +59,38 @@ const fetchEmails = () => {
                             else if (checkText.includes('vercel')) source = 'Vercel';
                             else if (checkText.includes('emailjs')) source = 'EmailJS';
 
+
+                            // Robust Phone Number Extraction
+                            const extractPhone = (text) => {
+                                if (!text) return null;
+                                // Labels to look for
+                                const labelRegex = /(?:phone|mobile|contact|whatsapp|number|tel|contect|mobile no|phone no)[:\s]*(\+?[\d\s-]{8,20})/gi;
+                                const labelMatch = labelRegex.exec(text);
+                                if (labelMatch && labelMatch[1]) {
+                                    const clean = labelMatch[1].trim().replace(/[^\d+]$/, '');
+                                    if (clean.replace(/\D/g, '').length >= 10) return clean;
+                                }
+                                // Standalone 10-14 digit numbers
+                                const standaloneRegex = /(\+?\d{1,4}[\s-]?)?(\d[\s-]?){9,11}\d/g;
+                                const matches = text.match(standaloneRegex);
+                                if (matches) {
+                                    for (let m of matches) {
+                                        const clean = m.trim();
+                                        if (clean.replace(/\D/g, '').length >= 10) return clean;
+                                    }
+                                }
+                                return null;
+                            };
+
+                            const phone = extractPhone(body + ' ' + subject);
+
+                            // Send WhatsApp Greeting (Mock)
+                            let whatsappStatus = 'Not Found';
+                            if (phone) {
+                                console.log(`[WhatsApp] Detected number ${phone}. Sending greeting...`);
+                                whatsappStatus = 'Sent';
+                            }
+
                             try {
                                 // Check if lead already exists
                                 const [existing] = await pool.query(
@@ -68,10 +100,10 @@ const fetchEmails = () => {
 
                                 if (existing.length === 0) {
                                     await pool.query(
-                                        'INSERT INTO leads (sender_name, sender_email, subject, body, status, source) VALUES (?, ?, ?, ?, ?, ?)',
-                                        [senderName, senderEmail, subject, body, 'New', source]
+                                        'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, whatsapp_status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                        [senderName, senderEmail, phone, subject, body, 'New', whatsappStatus, source]
                                     );
-                                    console.log(`✅ [${source}] New lead saved: ${senderEmail}`);
+                                    console.log(`✅ [${source}] New lead saved: ${senderEmail} | WhatsApp: ${whatsappStatus}`);
                                 }
                             } catch (dbErr) {
                                 console.error('Database Error:', dbErr);

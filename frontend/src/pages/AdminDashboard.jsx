@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, Mail, User, Clock, CheckCircle, XCircle, TrendingUp, DollarSign, Target, BarChart2, RefreshCw, ExternalLink } from 'lucide-react';
+import { UserPlus, Mail, User, Clock, CheckCircle, XCircle, TrendingUp, DollarSign, Target, BarChart2, RefreshCw, ExternalLink, Phone, MessageSquare } from 'lucide-react';
 
 const AdminDashboard = () => {
-    const { token } = useAuth();
+    const { token, logout } = useAuth();
     const [leads, setLeads] = useState([]);
     const [salesmen, setSalesmen] = useState([]);
     const [reports, setReports] = useState(null);
@@ -16,6 +16,8 @@ const AdminDashboard = () => {
     const [lastSync, setLastSync] = useState(new Date().toLocaleTimeString());
 
     useEffect(() => {
+        if (!token) return;
+
         fetchLeads();
         fetchSalesmen();
         fetchReports();
@@ -27,7 +29,7 @@ const AdminDashboard = () => {
         }, 30000);
 
         return () => clearInterval(pollInterval);
-    }, []);
+    }, [token]);
 
     const fetchLeads = async () => {
         try {
@@ -38,6 +40,9 @@ const AdminDashboard = () => {
             setLastSync(new Date().toLocaleTimeString());
         } catch (err) {
             console.error(err);
+            if (err.response?.status === 401) {
+                logout();
+            }
         }
     };
 
@@ -49,6 +54,9 @@ const AdminDashboard = () => {
             setSalesmen(res.data);
         } catch (err) {
             console.error(err);
+            if (err.response?.status === 401) {
+                logout();
+            }
         }
     };
 
@@ -60,6 +68,9 @@ const AdminDashboard = () => {
             setReports(res.data);
         } catch (err) {
             console.error(err);
+            if (err.response?.status === 401) {
+                logout();
+            }
         }
     };
 
@@ -76,7 +87,11 @@ const AdminDashboard = () => {
             alert('Lead assigned successfully!');
         } catch (error) {
             console.error(error);
-            alert('Failed to assign lead.');
+            if (error.response?.status === 401) {
+                logout();
+            } else {
+                alert('Failed to assign lead.');
+            }
         }
     };
 
@@ -94,7 +109,11 @@ const AdminDashboard = () => {
             alert('Salesman created successfully!');
         } catch (error) {
             console.error(error);
-            alert('Failed to create salesman.');
+            if (error.response?.status === 401) {
+                logout();
+            } else {
+                alert('Failed to create salesman.');
+            }
         }
     };
 
@@ -106,7 +125,7 @@ const AdminDashboard = () => {
         <div className="bg-gray-50/50 min-h-screen">
             <div className="p-8 max-w-7xl mx-auto space-y-10">
                 {/* Premium Glass Header */}
-                <header className="flex flex-col md:flex-row justify-between items-start md:items-center p-8 bg-white/80 backdrop-blur-xl rounded-[40px] border border-white shadow-2xl shadow-gray-200/50 relative overflow-hidden">
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-gray-100 rounded-3xl shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50 -mr-32 -mt-32"></div>
                     <div className="relative z-10">
                         <h1 className="text-4xl font-black text-gray-900 tracking-tight leading-tight">Control Center</h1>
@@ -134,20 +153,20 @@ const AdminDashboard = () => {
                 </header>
 
                 {/* Tracking Stats Row */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     {[
                         { label: 'Total Leads', value: leads.length, icon: <Mail />, color: 'blue' },
                         { label: 'Deals Won', value: getStatusCount('Deal Won'), icon: <TrendingUp />, color: 'emerald' },
                         { label: 'In Pipeline', value: getStatusCount('Assigned') + getStatusCount('Follow-up'), icon: <Target />, color: 'amber' },
                         { label: 'Revenue Generated', value: `$${reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue), 0).toLocaleString() || 0}`, icon: <DollarSign />, color: 'indigo' }
                     ].map((stat, i) => (
-                        <div key={i} className="bg-white p-8 rounded-[36px] border border-gray-100 shadow-sm flex items-center space-x-6 hover:shadow-xl hover:-translate-y-1 transition-all">
-                            <div className={`p-5 bg-${stat.color}-50 text-${stat.color}-600 rounded-[28px] shadow-inner`}>
+                        <div key={i} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-4 hover:shadow-md transition-all">
+                            <div className={`p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-2xl`}>
                                 {stat.icon}
                             </div>
                             <div>
-                                <span className="text-[10px] font-black text-gray-400 capitalize tracking-widest block mb-1">{stat.label}</span>
-                                <span className="text-3xl font-black text-gray-900 leading-none">{stat.value}</span>
+                                <span className="text-[10px] font-black text-gray-400 capitalize tracking-widest block mb-0.5">{stat.label}</span>
+                                <span className="text-2xl font-black text-gray-900 leading-none">{stat.value}</span>
                             </div>
                         </div>
                     ))}
@@ -173,73 +192,104 @@ const AdminDashboard = () => {
                     </div>
 
                     {activeTab === 'leads' ? (
-                        <div className="bg-white rounded-[40px] shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-                                <h2 className="text-xl font-black text-gray-900 italic">Centralized Lead Pool</h2>
-                                <span className="text-xs font-bold text-gray-400 bg-white px-4 py-2 rounded-full border border-gray-100">{leads.length} Total Records</span>
+                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                                <h2 className="text-lg font-black text-gray-900">Lead Database</h2>
+                                <span className="text-xs font-bold text-gray-400 bg-white px-3 py-1 rounded-full border border-gray-100">{leads.length} Records</span>
                             </div>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left">
+                                <table className="w-full text-left table-auto">
                                     <thead>
-                                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-50">
-                                            <th className="p-8">Prospect Identity</th>
-                                            <th className="p-8">Requirement Body</th>
-                                            <th className="p-8">Assignment</th>
-                                            <th className="p-8">Status</th>
-                                            <th className="p-8 text-center">Operation</th>
+                                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 bg-gray-50/10">
+                                            <th className="px-6 py-4">Identity</th>
+                                            <th className="px-6 py-4">Contact & Automation</th>
+                                            <th className="px-6 py-4">Lead Content</th>
+                                            <th className="px-6 py-4">Assigned To</th>
+                                            <th className="px-6 py-4">Status</th>
+                                            <th className="px-6 py-4 text-center">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
                                         {leads.map(lead => (
                                             <tr key={lead.id} className="hover:bg-blue-50/20 transition-all group">
-                                                <td className="p-8">
-                                                    <div className="font-extrabold text-gray-900 text-lg">{lead.sender_name || 'Anonymous Prospect'}</div>
-                                                    <div className="text-gray-400 font-medium text-sm flex items-center space-x-1">
-                                                        <span>{lead.sender_email}</span>
+                                                <td className="px-6 py-4">
+                                                    <div className="font-extrabold text-gray-900">{lead.sender_name || 'Anonymous'}</div>
+                                                    <div className="text-gray-400 font-medium text-xs">{lead.sender_email}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <div className="font-bold text-gray-900 flex items-center space-x-2">
+                                                            {lead.phone ? (
+                                                                <a href={`tel:${lead.phone}`} className="hover:text-blue-600 transition-colors flex items-center space-x-2 text-sm">
+                                                                    <Phone size={12} className="text-gray-400" />
+                                                                    <span>{lead.phone}</span>
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-gray-400 text-sm">No Number</span>
+                                                            )}
+                                                            {lead.phone && (
+                                                                <a
+                                                                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-emerald-500 hover:text-emerald-600 transition-colors"
+                                                                >
+                                                                    <MessageSquare size={12} />
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                        <div className="mt-1">
+                                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                                    'bg-gray-50 text-gray-400 border border-gray-100'
+                                                                }`}>
+                                                                WA: {lead.whatsapp_status}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </td>
-                                                <td className="p-8">
-                                                    <div className="font-bold text-gray-900 text-xs truncate max-w-[200px] mb-1">{lead.subject}</div>
+                                                <td className="px-6 py-4 max-w-xs">
+                                                    <div className="font-bold text-gray-900 text-xs mb-0.5 truncate">{lead.subject}</div>
                                                     <div className="flex items-center space-x-2">
-                                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${lead.source === 'GitHub' ? 'bg-gray-100 text-gray-700' :
-                                                            lead.source === 'Vercel' ? 'bg-blue-50 text-blue-600' :
-                                                                lead.source === 'MagicBricks' ? 'bg-red-50 text-red-600' :
-                                                                    'bg-gray-50 text-gray-400'
-                                                            }`}>
-                                                            {lead.source || 'Direct Email'}
+                                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide bg-gray-50 text-gray-500 border border-gray-100`}>
+                                                            {lead.source || 'Direct'}
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="p-8">
+                                                <td className="px-6 py-4">
                                                     {lead.assigned_to ? (
-                                                        <div className="flex items-center space-x-3 bg-gray-50 rounded-2xl p-3 border border-gray-100 w-fit">
-                                                            <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xs font-black ring-4 ring-blue-50">
+                                                        <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
+                                                            <div className="w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
                                                                 {salesmen.find(s => s.id === lead.assigned_to)?.name?.[0] || 'U'}
                                                             </div>
-                                                            <span className="text-sm font-bold text-gray-700">{salesmen.find(s => s.id === lead.assigned_to)?.name || 'Processing'}</span>
+                                                            <span className="text-xs font-bold text-gray-700">{salesmen.find(s => s.id === lead.assigned_to)?.name || 'Admin'}</span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-xs font-black text-amber-500 bg-amber-50 px-4 py-2 rounded-full border border-amber-100 tracking-widest uppercase">Unassigned</span>
+                                                        <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-1 rounded border border-amber-100 uppercase">Unassigned</span>
                                                     )}
                                                 </td>
-                                                <td className="p-8 text-center">
-                                                    <span className={`status-badge status-${lead.status.toLowerCase().replace(' ', '-')} ring-4 ring-opacity-10`}>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'New' ? 'bg-blue-50 text-blue-700 ring-blue-700/10' :
+                                                        lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
+                                                            lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                                'bg-gray-50 text-gray-600 ring-gray-600/10'
+                                                        }`}>
                                                         {lead.status}
                                                     </span>
                                                 </td>
-                                                <td className="p-8">
+                                                <td className="px-6 py-4">
                                                     <div className="flex justify-center">
                                                         {!lead.assigned_to ? (
                                                             <button
                                                                 onClick={() => setSelectedLead(lead.id)}
-                                                                className="bg-blue-600 text-white px-6 py-3 rounded-2xl text-xs font-black hover:bg-black transition-all shadow-lg shadow-blue-100 flex items-center space-x-2 active:scale-95"
+                                                                className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
                                                             >
-                                                                <UserPlus size={16} />
-                                                                <span>Delegate</span>
+                                                                <UserPlus size={12} />
+                                                                <span>Assign</span>
                                                             </button>
                                                         ) : (
-                                                            <button className="text-gray-300 hover:text-blue-500 transition-colors p-2">
-                                                                <ExternalLink size={20} />
+                                                            <button className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                                <ExternalLink size={16} />
                                                             </button>
                                                         )}
                                                     </div>
