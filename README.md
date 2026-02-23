@@ -1,121 +1,86 @@
-# 🏗️ Builder CRM
+# BuilderCRM - Advanced Lead Management System
 
-A high-performance, premium CRM system specifically designed for builders and real estate professionals. It automates lead generation by extracting potential client data directly from Gmail inboxes and provides a sophisticated dashboard for managing the entire sales funnel.
+A high-performance, aesthetically pleasing CRM designed for real estate and service-based businesses. This system automates the bridge between email inquiries and mobile communication (WhatsApp/Calls), featuring a premium dashboard for both Admins and Sales Personnel.
 
----
+## 🚀 Core Features
 
-## ✨ Key Features
+### 1. Intelligent Lead Capture (Automation)
+- **Email Inflow Monitoring**: Real-time integration with Gmail/IMAP to detect new inquiries.
+- **Robust Phone Extraction**: Advanced regex logic to identify mobile numbers from heterogeneous email content (subject and body), handling international formats and labels (e.g., "Mobile:", "Contact:").
+- **Smart Sourcing**: Automatically identifies lead origins (MagicBricks, Housing.com, 99Acres, GitHub, Vercel, EmailJS, etc.) and tags them with curated badges.
 
-### 📨 Intelligent Lead Automation
-- **Gmail Integration**: Real-time lead extraction from emails using IMAP.
-- **Auto-Parsing**: Automatically captures sender names, emails, and project interests.
-- **Scheduled Checks**: Background cron jobs check for new leads every 10 minutes.
+### 2. WhatsApp Integration (The "Greeting" Engine)
+- **Automated Greetings**: Deep integration with Meta's Official WhatsApp Cloud API.
+- **Status Tracking**: Live monitoring of message status within the dashboard:
+  - 🟢 **Sent**: Successfully delivered via API.
+  - 🔴 **Failed**: API error or invalid number.
+  - 🟡 **Not Configured**: Missing API credentials in `.env`.
+  - ⚪ **Not Found**: No valid phone number detected in the email.
+- **One-Click Chat**: Direct `wa.me` links for manual follow-ups.
 
-### 🛡️ Admin Powerhouse
-- **Analytics Dashboard**: Visual overview of lead distribution and sales performance.
-- **Glassmorphism UI**: Premium, modern interface with smooth animations (Framer Motion).
-- **Salesman Management**: Easily onboard salesmen and track their individual performance metrics.
-- **Lead Assignment**: Distribute leads to specific team members with a single click.
+### 3. Dual-Dashboard Architecture
+- **Admin Control Center**:
+  - **Performance Analytics**: Track salesman performance (Deals Won, Leads Assigned, Revenue).
+  - **Delegate Engine**: Assign leads to specific salesmen in one click.
+  - **Revenue Visualization**: Monthly trends and conversion tracking.
+- **Salesman Interface**:
+  - **Action-Oriented View**: Focus on assigned leads and immediate follow-ups.
+  - **Click-to-Call**: Direct `tel:` integration for instant calling from mobile/desktop.
+  - **Requirement Context**: Expandable views to read full email bodies without leaving the list.
 
-### 💼 Salesman Workspace
-- **Dedicated Dashboard**: Focused view on assigned leads only.
-- **Follow-up Reminders**: Smart notification system for upcoming client meetings/calls.
-- **Deal Closing**: Record "Won" deals with project details and monetary value.
-- **Status Pipeline**: Progress leads through 'New' to 'Deal Won'.
-
----
-
-## 🛠️ Tech Stack
-
-- **Frontend**: ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB) ![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white) ![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white) ![Framer Motion](https://img.shields.io/badge/Framer_Motion-0055FF?style=for-the-badge&logo=framer&logoColor=white)
-- **Backend**: ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white) ![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white) ![MySQL](https://img.shields.io/badge/MySQL-00000F?style=for-the-badge&logo=mysql&logoColor=white)
-- **Automation**: Node-cron, IMAP, Mailparser.
-- **Security**: JWT Authentication, Bcrypt password hashing.
-
----
-
-## 🚀 Getting Started
-
-### 📋 Prerequisites
-- **Node.js**: v16+ recommended.
-- **MySQL**: Local instance or cloud database (like Aiven or PlanetScale).
-- **Gmail App Password**: For lead extraction (Standard login won't work).
-
-### 1. Database Setup 🗄️
-
-You can set up the database in two ways:
-
-#### A. Automated Setup (Recommended)
-1. Ensure your MySQL server is running.
-2. Configure your database credentials in `backend/.env` (see below).
-3. Run the initialization script:
-   ```bash
-   cd backend
-   node setupDB.js
-   ```
-   *This script will create the database, tables, and a default admin user.*
-
-#### B. Manual Setup
-1. Create a database named `builder_crm`.
-2. Import the SQL schema:
-   ```bash
-   mysql -u your_user -p builder_crm < backend/schema.sql
-   ```
-
-### 2. Environment Configuration 🔑
-
-Create a `.env` file in the `backend` directory:
-
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `PORT` | Backend server port | `5000` |
-| `DB_HOST` | MySQL database host | `localhost` |
-| `DB_USER` | MySQL username | `root` |
-| `DB_PASSWORD`| MySQL password | `yourpassword` |
-| `DB_NAME` | Database name | `builder_crm` |
-| `EMAIL_USER` | Gmail address for leads | `example@gmail.com` |
-| `EMAIL_PASS` | Gmail **App Password** | `xxxx xxxx xxxx xxxx` |
-| `JWT_SECRET` | Secret for auth tokens | `any_random_string` |
-
-### 3. Installation & Run
-
-#### Backend:
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-#### Frontend:
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### 4. Premium Design System
+- **Rich Aesthetics**: Built with a sleek, low-clutter interface using glassmorphism influences and high-contrast typography.
+- **Responsive Layout**: Optimized for both high-density desktop monitoring and on-the-go mobile handling.
 
 ---
 
-## 🔒 Default Access
-- **URL**: `http://localhost:5173`
-- **Admin Email**: `admin@example.com`
-- **Admin Password**: `admin123`
+## 🛠️ System Workflow
+
+### Stage 1: The Capture
+An email arrives in the monitored inbox. The **Backend Email Service** parses the content within seconds, extracts the sender's details, identifies the source, and scans for a 10+ digit phone number.
+
+### Stage 2: The Automation
+If a phone number is found and WhatsApp API keys are present, the system fires an **Official WhatsApp Greeting** (Template-based) to the customer instantly. The result is logged in the database.
+
+### Stage 3: The Delegation
+The Admin sees the new lead in the **Control Center**. They can instantly see if the automated message was sent. The Admin then "Assigns" the lead to a Salesman.
+
+### Stage 4: The Conversion
+The Salesman is notified on their dashboard. They can click the **Phone icon** to call or the **WhatsApp icon** to continue the conversation. Once the talk is over, they update the status to "Follow-up" or "Won."
 
 ---
 
-## 📁 Project Structure
+## ⚙️ Setup & Configuration
+
+### Backend Environment (`backend/.env`)
 ```text
-BuilderCRM/
-├── backend/
-│   ├── config/      # DB Connection
-│   ├── controllers/ # Business Logic
-│   ├── routes/      # API Endpoints
-│   ├── cron/        # Email Check Jobs
-│   ├── schema.sql   # DB Schema
-│   └── setupDB.js   # Initialization Script
-├── frontend/
-│   ├── src/
-│   │   ├── components/ # Reusable UI
-│   │   ├── pages/      # View Components
-│   │   └── context/    # State Management
-└── README.md
+# Database
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=builder_crm
+
+# Email Automation (Gmail App Password)
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+
+# Authentication
+JWT_SECRET=any_random_string
+
+# Official WhatsApp API (Meta Cloud API)
+WHATSAPP_TOKEN=your_meta_access_token
+WHATSAPP_PHONE_ID=your_phone_id
+WHATSAPP_GREETING_TEMPLATE=hello_world
 ```
+
+### Installation
+1. **Database**: Import the provided schema into MySQL.
+2. **Backend**: `cd backend && npm install && npm run dev`
+3. **Frontend**: `cd frontend && npm install && npm run dev`
+
+---
+
+## 🎨 Technology Stack
+- **Frontend**: React.js, TailwindCSS (v3), Lucide-React Icons.
+- **Backend**: Node.js, Express, MySQL (pool connections).
+- **Communication**: IMAP (Email), Meta Cloud API (WhatsApp), Axios.

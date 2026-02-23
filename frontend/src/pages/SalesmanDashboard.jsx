@@ -198,8 +198,9 @@ const SalesmanDashboard = () => {
                                         </div>
                                         <div className="mt-1">
                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                    'bg-gray-50 text-gray-400 border border-gray-100'
+                                                    lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                        lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                            'bg-gray-50 text-gray-400 border border-gray-100'
                                                 }`}>
                                                 WA: {lead.whatsapp_status}
                                             </span>
@@ -216,8 +217,8 @@ const SalesmanDashboard = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
-                                                lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
-                                                    'bg-blue-50 text-blue-700 ring-blue-700/10'
+                                            lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
+                                                'bg-blue-50 text-blue-700 ring-blue-700/10'
                                             }`}>
                                             {lead.status}
                                         </span>

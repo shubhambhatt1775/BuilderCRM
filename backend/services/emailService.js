@@ -1,6 +1,7 @@
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const pool = require('../config/db');
+const axios = require('axios');
 require('dotenv').config();
 
 const fetchEmails = () => {
@@ -84,11 +85,47 @@ const fetchEmails = () => {
 
                             const phone = extractPhone(body + ' ' + subject);
 
-                            // Send WhatsApp Greeting (Mock)
+                            // Real WhatsApp Greeting Integration
+                            const sendWhatsAppGreeting = async (targetPhone) => {
+                                if (!process.env.WHATSAPP_TOKEN || !process.env.WHATSAPP_PHONE_ID) {
+                                    console.warn('⚠️ WhatsApp API credentials missing in .env. Falling back to Log.');
+                                    return 'Not Configured';
+                                }
+
+                                try {
+                                    const cleanPhone = targetPhone.replace(/\D/g, ''); // Remove all non-digits
+                                    const url = `https://graph.facebook.com/v17.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
+
+                                    const response = await axios.post(url, {
+                                        messaging_product: "whatsapp",
+                                        to: cleanPhone,
+                                        type: "template",
+                                        template: {
+                                            name: process.env.WHATSAPP_GREETING_TEMPLATE || "hello_world",
+                                            language: { code: "en_US" }
+                                        }
+                                    }, {
+                                        headers: {
+                                            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+
+                                    if (response.data && response.data.messages) {
+                                        console.log(`✅ [WhatsApp] Message Sent Successfully to ${cleanPhone}`);
+                                        return 'Sent';
+                                    }
+                                    return 'Failed';
+                                } catch (error) {
+                                    console.error('❌ [WhatsApp] API Error:', error.response?.data || error.message);
+                                    return 'Failed';
+                                }
+                            };
+
                             let whatsappStatus = 'Not Found';
                             if (phone) {
-                                console.log(`[WhatsApp] Detected number ${phone}. Sending greeting...`);
-                                whatsappStatus = 'Sent';
+                                console.log(`[WhatsApp] Attempting real greeting to ${phone}...`);
+                                whatsappStatus = await sendWhatsAppGreeting(phone);
                             }
 
                             try {

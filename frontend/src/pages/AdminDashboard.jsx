@@ -240,8 +240,9 @@ const AdminDashboard = () => {
                                                         </div>
                                                         <div className="mt-1">
                                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                                    'bg-gray-50 text-gray-400 border border-gray-100'
+                                                                    lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                                        lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                            'bg-gray-50 text-gray-400 border border-gray-100'
                                                                 }`}>
                                                                 WA: {lead.whatsapp_status}
                                                             </span>
