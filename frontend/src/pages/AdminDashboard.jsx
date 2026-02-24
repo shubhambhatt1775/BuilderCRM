@@ -1,7 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, Mail, User, Clock, CheckCircle, XCircle, TrendingUp, DollarSign, Target, BarChart2, RefreshCw, ExternalLink, Phone, MessageSquare } from 'lucide-react';
+import { UserPlus, Mail, User, Clock, CheckCircle, XCircle, TrendingUp, Target, BarChart2, RefreshCw, ExternalLink, Phone, MessageSquare } from 'lucide-react';
+
+// Rupee Icon Component
+const RupeeIcon = ({ size = 16, className = "" }) => (
+    <svg 
+        width={size} 
+        height={size} 
+        viewBox="0 0 24 24" 
+        fill="currentColor" 
+        className={className}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <path d="M6 3h12v2h-4c-.6 0-1 .4-1 1v2h5v2h-5v2c0 .6.4 1 1 1h4v2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z"/>
+        <path d="M10 7h4M10 11h4"/>
+    </svg>
+);
 
 const AdminDashboard = () => {
     const { token, logout } = useAuth();
@@ -239,7 +256,7 @@ const AdminDashboard = () => {
                         { label: 'Total Leads', value: leads.length, icon: <Mail />, color: 'blue' },
                         { label: 'Deals Won', value: getStatusCount('Deal Won'), icon: <TrendingUp />, color: 'emerald' },
                         { label: 'In Pipeline', value: getStatusCount('Assigned') + getStatusCount('Follow-up'), icon: <Target />, color: 'amber' },
-                        { label: 'Revenue Generated', value: `$${reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue), 0).toLocaleString() || 0}`, icon: <DollarSign />, color: 'indigo' }
+                        { label: 'Revenue Generated', value: `₹${reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue), 0).toLocaleString() || 0}`, icon: <RupeeIcon />, color: 'indigo' }
                     ].map((stat, i) => (
                         <div key={i} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-3 sm:space-x-4 hover:shadow-md transition-all">
                             <div className={`p-3 sm:p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl sm:rounded-2xl flex-shrink-0`}>
@@ -636,11 +653,11 @@ const AdminDashboard = () => {
                                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-blue-200">
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="p-2 sm:p-3 bg-blue-600 rounded-xl sm:rounded-2xl">
-                                            <DollarSign className="text-white" size={16} />
+                                            <RupeeIcon className="text-white" size={16} />
                                         </div>
                                         <span className="text-xs font-black text-blue-700 uppercase tracking-widest">Revenue</span>
                                     </div>
-                                    <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">${reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue), 0).toLocaleString() || 0}</h3>
+                                    <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">₹{reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue), 0).toLocaleString() || 0}</h3>
                                     <p className="text-xs sm:text-sm text-blue-700 font-medium">Total Revenue Generated</p>
                                     <div className="mt-3 flex items-center space-x-2">
                                         <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded-full font-medium">+15%</span>
@@ -725,7 +742,7 @@ const AdminDashboard = () => {
                                                             <div className="mt-1 text-xs text-red-500 font-medium">Lost Deals</div>
                                                         </td>
                                                         <td className="p-8">
-                                                            <div className="font-black text-gray-900 text-xl font-mono">${revenue.toLocaleString()}</div>
+                                                            <div className="font-black text-gray-900 text-xl font-mono">₹{revenue.toLocaleString()}</div>
                                                             <div className="mt-1 text-xs text-gray-500">Total Revenue</div>
                                                         </td>
                                                         <td className="p-8">

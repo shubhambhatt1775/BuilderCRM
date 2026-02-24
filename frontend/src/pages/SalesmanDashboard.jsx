@@ -3,6 +3,23 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, MessageSquare, Target } from 'lucide-react';
 
+// Rupee Icon Component
+const RupeeIcon = ({ size = 16, className = "" }) => (
+    <svg 
+        width={size} 
+        height={size} 
+        viewBox="0 0 24 24" 
+        fill="currentColor" 
+        className={className}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <path d="M6 3h12v2h-4c-.6 0-1 .4-1 1v2h5v2h-5v2c0 .6.4 1 1 1h4v2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z"/>
+        <path d="M10 7h4M10 11h4"/>
+    </svg>
+);
+
 const SalesmanDashboard = () => {
     const { token, user, logout } = useAuth();
     const [leads, setLeads] = useState([]);
@@ -355,7 +372,10 @@ const SalesmanDashboard = () => {
                             {statusUpdate.status === 'Deal Won' && (
                                 <div className="space-y-6 animate-in p-8 bg-green-50 rounded-[32px] border border-green-100 shadow-sm">
                                     <h3 className="font-extrabold text-green-800 text-xl flex items-center space-x-3">
-                                        <div className="p-2 bg-green-500 text-white rounded-xl"><CheckCircle size={20} /></div>
+                                        <div className="p-2 bg-green-500 text-white rounded-xl flex items-center space-x-2">
+                                            <RupeeIcon size={20} />
+                                            <CheckCircle size={20} />
+                                        </div>
                                         <span>Booking Details</span>
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -370,7 +390,7 @@ const SalesmanDashboard = () => {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-green-700 uppercase mb-2">Booking Amount ($)</label>
+                                            <label className="block text-xs font-bold text-green-700 uppercase mb-2">Booking Amount (₹)</label>
                                             <input
                                                 type="number" className="w-full p-4 bg-white border border-green-200 rounded-2xl outline-none focus:ring-4 focus:ring-green-400/20 font-black text-lg"
                                                 placeholder="0.00"
