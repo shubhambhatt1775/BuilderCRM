@@ -144,8 +144,21 @@ const AdminDashboard = () => {
                             <span>Onboard Salesman</span>
                         </button>
                         <button
-                            onClick={() => { fetchLeads(); fetchReports(); }}
+                            onClick={async () => { 
+                                try {
+                                    const res = await axios.post('http://localhost:5000/api/refresh-emails', {}, {
+                                        headers: { Authorization: `Bearer ${token}` }
+                                    });
+                                    alert(`Email refresh completed! Processed: ${res.data.processed}, Skipped: ${res.data.skipped}`);
+                                    fetchLeads(); 
+                                    fetchReports(); 
+                                } catch (error) {
+                                    console.error('Refresh error:', error);
+                                    alert('Failed to refresh emails. Please try again.');
+                                }
+                            }}
                             className="bg-white p-4 rounded-[24px] border-2 border-gray-100 hover:border-gray-200 transition-all text-gray-400 hover:text-gray-900"
+                            title="Fetch new emails from inbox"
                         >
                             <RefreshCw size={24} />
                         </button>
@@ -217,7 +230,7 @@ const AdminDashboard = () => {
                                                     <div className="text-gray-400 font-medium text-xs">{lead.sender_email}</div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
+                                                    <div className="flex flex-col space-y-2">
                                                         <div className="font-bold text-gray-900 flex items-center space-x-2">
                                                             {lead.phone ? (
                                                                 <a href={`tel:${lead.phone}`} className="hover:text-blue-600 transition-colors flex items-center space-x-2 text-sm">
@@ -227,17 +240,17 @@ const AdminDashboard = () => {
                                                             ) : (
                                                                 <span className="text-gray-400 text-sm">No Number</span>
                                                             )}
-                                                            {lead.phone && (
-                                                                <a
-                                                                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-emerald-500 hover:text-emerald-600 transition-colors"
-                                                                >
-                                                                    <MessageSquare size={12} />
-                                                                </a>
-                                                            )}
                                                         </div>
+                                                        {lead.phone && (
+                                                            <a
+                                                                href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-emerald-500 hover:text-emerald-600 transition-colors flex items-center space-x-1 text-sm"
+                                                            >
+                                                                <MessageSquare size={12} />
+                                                            </a>
+                                                        )}
                                                         <div className="mt-1">
                                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                                                                     lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
@@ -356,13 +369,16 @@ const AdminDashboard = () => {
                                                         <div className="font-black text-gray-900 text-xl font-mono">${parseFloat(s.total_revenue).toLocaleString()}</div>
                                                     </td>
                                                     <td className="p-8">
-                                                        <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden relative shadow-inner">
-                                                            <div
-                                                                className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-1000"
-                                                                style={{ width: `${rate}%` }}
-                                                            ></div>
-                                                            <span className="absolute right-0 -top-6 text-[10px] font-black text-blue-600">{rate}% SUCCESS</span>
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-full bg-gray-100 h-3 rounded-full overflow-hidden relative shadow-inner flex-1">
+                                                                <div
+                                                                    className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-1000"
+                                                                    style={{ width: `${rate}%` }}
+                                                                ></div>
+                                                            </div>
+                                                            <span className="text-sm font-black text-blue-600 min-w-[50px] text-right">{rate}%</span>
                                                         </div>
+                                                        <span className="absolute right-0 -top-6 text-[10px] font-black text-blue-600">{rate}% SUCCESS</span>
                                                     </td>
                                                 </tr>
                                             );

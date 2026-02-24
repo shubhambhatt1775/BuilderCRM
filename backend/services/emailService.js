@@ -4,165 +4,198 @@ const pool = require('../config/db');
 const axios = require('axios');
 require('dotenv').config();
 
+/**
+ * fetchEmails - Alternative Email Fetching Service
+ * 
+ * This service provides email fetching functionality with enhanced configuration
+ * - Uses environment variables for credentials
+ * - Implements robust IMAP connection settings
+ * - Provides phone number extraction and source detection
+ * - Handles WhatsApp API integration for automated greetings
+ * 
+ * Used by manual fetch endpoints and alternative email processing
+ */
 const fetchEmails = () => {
+    // Enhanced IMAP configuration with improved TLS settings
     const imapConfig = {
         user: process.env.EMAIL_USER,
         password: process.env.EMAIL_PASS,
-        host: 'imap.gmail.com',
+        host: 'cp-rsl02.sin02.ds.network',
         port: 993,
         tls: true,
-        tlsOptions: { rejectUnauthorized: false },
-        authTimeout: 10000
+        tlsOptions: { 
+            rejectUnauthorized: false,
+            servername: 'cp-rsl02.sin02.ds.network' // Explicit servername for TLS handshake
+        },
+        authTimeout: 30000, // Increased timeout for better reliability
+        connTimeout: 30000,
+        keepalive: {
+            interval: 10000,
+            idleInterval: 300000,
+            forceNoop: true
+        }
     };
 
     console.log(`Connecting to IMAP for ${imapConfig.user}...`);
     const imap = new Imap(imapConfig);
 
+    /**
+     * Open INBOX and fetch emails
+     * - Processes emails and converts to leads
+     * - Implements duplicate prevention logic
+     * - Sends WhatsApp greetings when possible
+     */
     function openInbox(cb) {
         imap.openBox('INBOX', false, cb);
     }
 
+    // IMAP event handlers
     imap.once('ready', () => {
         openInbox((err, box) => {
-            if (err) throw err;
+            if (err) {
+                console.error('Error opening inbox:', err);
+                return;
+            }
 
-            // Search for all emails from the last 24 hours to ensure we don't miss read ones
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
+            // Fetch all emails from inbox
+            imap.search(['ALL'], (err, results) => {
+                if (err) {
+                    console.error('Search error:', err);
+                    return;
+                }
 
-            imap.search(['ALL', ['SINCE', yesterday]], (err, results) => {
-                if (err) throw err;
-                if (!results.length) {
-                    console.log('No recent emails found.');
+                if (results.length === 0) {
+                    console.log('No emails found');
                     imap.end();
                     return;
                 }
 
-                const f = imap.fetch(results, { bodies: '' });
-                f.on('message', (msg, seqno) => {
+                console.log(`Found ${results.length} emails, processing...`);
+
+                // Fetch email content
+                const fetch = imap.fetch(results, { bodies: '', struct: true });
+                let processedCount = 0;
+
+                fetch.on('message', (msg, seqno) => {
+                    const buffer = [];
+                    
                     msg.on('body', (stream, info) => {
-                        simpleParser(stream, async (err, mail) => {
-                            if (err) console.error(err);
-
-                            const senderName = mail.from?.value[0]?.name || 'Anonymous';
-                            const senderEmail = mail.from?.value[0]?.address;
-                            const subject = mail.subject || '';
-                            const body = mail.text || '';
-
-                            // Determine Lead Source
-                            let source = 'Direct Email';
-                            const checkText = (subject + ' ' + body).toLowerCase();
-
-                            if (checkText.includes('magicbricks')) source = 'MagicBricks';
-                            else if (checkText.includes('housing.com')) source = 'Housing.com';
-                            else if (checkText.includes('99acres')) source = '99Acres';
-                            else if (checkText.includes('github')) source = 'GitHub';
-                            else if (checkText.includes('vercel')) source = 'Vercel';
-                            else if (checkText.includes('emailjs')) source = 'EmailJS';
-
-
-                            // Robust Phone Number Extraction
-                            const extractPhone = (text) => {
-                                if (!text) return null;
-                                // Labels to look for
-                                const labelRegex = /(?:phone|mobile|contact|whatsapp|number|tel|contect|mobile no|phone no)[:\s]*(\+?[\d\s-]{8,20})/gi;
-                                const labelMatch = labelRegex.exec(text);
-                                if (labelMatch && labelMatch[1]) {
-                                    const clean = labelMatch[1].trim().replace(/[^\d+]$/, '');
-                                    if (clean.replace(/\D/g, '').length >= 10) return clean;
-                                }
-                                // Standalone 10-14 digit numbers
-                                const standaloneRegex = /(\+?\d{1,4}[\s-]?)?(\d[\s-]?){9,11}\d/g;
-                                const matches = text.match(standaloneRegex);
-                                if (matches) {
-                                    for (let m of matches) {
-                                        const clean = m.trim();
-                                        if (clean.replace(/\D/g, '').length >= 10) return clean;
-                                    }
-                                }
-                                return null;
-                            };
-
-                            const phone = extractPhone(body + ' ' + subject);
-
-                            // Real WhatsApp Greeting Integration
-                            const sendWhatsAppGreeting = async (targetPhone) => {
-                                if (!process.env.WHATSAPP_TOKEN || !process.env.WHATSAPP_PHONE_ID) {
-                                    console.warn('⚠️ WhatsApp API credentials missing in .env. Falling back to Log.');
-                                    return 'Not Configured';
-                                }
-
-                                try {
-                                    const cleanPhone = targetPhone.replace(/\D/g, ''); // Remove all non-digits
-                                    const url = `https://graph.facebook.com/v17.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
-
-                                    const response = await axios.post(url, {
-                                        messaging_product: "whatsapp",
-                                        to: cleanPhone,
-                                        type: "template",
-                                        template: {
-                                            name: process.env.WHATSAPP_GREETING_TEMPLATE || "hello_world",
-                                            language: { code: "en_US" }
-                                        }
-                                    }, {
-                                        headers: {
-                                            'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`,
-                                            'Content-Type': 'application/json'
-                                        }
-                                    });
-
-                                    if (response.data && response.data.messages) {
-                                        console.log(`✅ [WhatsApp] Message Sent Successfully to ${cleanPhone}`);
-                                        return 'Sent';
-                                    }
-                                    return 'Failed';
-                                } catch (error) {
-                                    console.error('❌ [WhatsApp] API Error:', error.response?.data || error.message);
-                                    return 'Failed';
-                                }
-                            };
-
-                            let whatsappStatus = 'Not Found';
-                            if (phone) {
-                                console.log(`[WhatsApp] Attempting real greeting to ${phone}...`);
-                                whatsappStatus = await sendWhatsAppGreeting(phone);
-                            }
-
+                        stream.on('data', (chunk) => {
+                            buffer.push(chunk);
+                        });
+                        stream.once('end', async () => {
                             try {
-                                // Check if lead already exists
-                                const [existing] = await pool.query(
-                                    'SELECT id FROM leads WHERE sender_email = ? AND subject = ?',
-                                    [senderEmail, subject]
-                                );
-
-                                if (existing.length === 0) {
-                                    await pool.query(
-                                        'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, whatsapp_status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                                        [senderName, senderEmail, phone, subject, body, 'New', whatsappStatus, source]
-                                    );
-                                    console.log(`✅ [${source}] New lead saved: ${senderEmail} | WhatsApp: ${whatsappStatus}`);
+                                const email = Buffer.concat(buffer).toString('utf8');
+                                const parsed = await simpleParser(email);
+                                 
+                                // Extract lead information
+                                const senderEmail = parsed.from?.value?.[0]?.address || '';
+                                const senderName = parsed.from?.value?.[0]?.name || senderEmail.split('@')[0];
+                                const subject = parsed.subject || '';
+                                const body = parsed.text || '';
+                                 
+                                // Extract phone number using regex patterns
+                                const phoneRegex = /(?:\+?(\d{1,3})?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4,5})|\b\d{10,15}\b)/g;
+                                const phoneMatch = body.match(phoneRegex) || subject.match(phoneRegex);
+                                const phone = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : '';
+                                 
+                                // Detect email source
+                                let source = 'Direct Email';
+                                if (subject.includes('MagicBricks') || subject.includes('99Acres')) {
+                                    source = 'MagicBricks';
+                                } else if (subject.includes('GitHub') || senderEmail.includes('github.com')) {
+                                    source = 'GitHub';
+                                } else if (subject.includes('Housing') || subject.includes('Housing.com')) {
+                                    source = 'Housing';
+                                } else if (subject.includes('Vercel') || senderEmail.includes('vercel.com')) {
+                                    source = 'Vercel';
                                 }
-                            } catch (dbErr) {
-                                console.error('Database Error:', dbErr);
+
+                                // WhatsApp API configuration check
+                                const whatsappToken = process.env.WHATSAPP_TOKEN;
+                                const whatsappPhoneId = process.env.WHATSAPP_PHONE_ID;
+                                let whatsappStatus = 'Not Configured';
+
+                                // Check for duplicate emails (same sender + subject within last day)
+                                try {
+                                    const [existing] = await pool.query(
+                                        'SELECT id FROM leads WHERE sender_email = ? AND subject = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)',
+                                        [senderEmail, subject]
+                                    );
+
+                                    if (existing.length === 0) {
+                                        // Insert new lead into database
+                                        await pool.query(
+                                            'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, whatsapp_status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                            [senderName, senderEmail, phone, subject, body, 'New', whatsappStatus, source]
+                                        );
+                                        processedCount++;
+                                        console.log(`✅ [${processedCount}/${results.length}] [${source}] New lead: ${senderEmail} - "${subject.substring(0, 50)}..."`);
+
+                                        // Send WhatsApp greeting if configured and phone number exists
+                                        if (phone && whatsappToken && whatsappPhoneId) {
+                                            try {
+                                                const response = await axios.post(`https://graph.facebook.com/v18.0/${whatsappPhoneId}/messages`, {
+                                                    messaging_product: 'whatsapp',
+                                                    to: `+${phone}`,
+                                                    type: 'template',
+                                                    template: {
+                                                        name: process.env.WHATSAPP_GREETING_TEMPLATE || 'hello_world',
+                                                        language: {
+                                                            code: 'en'
+                                                        }
+                                                    }
+                                                }, {
+                                                    headers: {
+                                                        'Authorization': `Bearer ${whatsappToken}`,
+                                                        'Content-Type': 'application/json'
+                                                    }
+                                                });
+
+                                                if (response.status === 200) {
+                                                    whatsappStatus = 'Sent';
+                                                    console.log(`📱 WhatsApp sent to +${phone}`);
+                                                } else {
+                                                    whatsappStatus = 'Failed';
+                                                    console.log(`❌ WhatsApp failed for +${phone}: ${response.status}`);
+                                                }
+
+                                                // Update WhatsApp status in database
+                                                await pool.query(
+                                                    'UPDATE leads SET whatsapp_status = ? WHERE sender_email = ? AND subject = ?',
+                                                    [whatsappStatus, senderEmail, subject]
+                                                );
+
+                                            } catch (whatsappErr) {
+                                                console.error('WhatsApp API Error:', whatsappErr.response?.data || whatsappErr.message);
+                                                whatsappStatus = 'Failed';
+                                                
+                                                // Update status even on failure
+                                                await pool.query(
+                                                    'UPDATE leads SET whatsapp_status = ? WHERE sender_email = ? AND subject = ?',
+                                                    [whatsappStatus, senderEmail, subject]
+                                                );
+                                            }
+                                        }
+                                    } else {
+                                        console.log(`ℹ️ [${processedCount}/${results.length}] [${source}] Already exists: ${senderEmail} - "${subject.substring(0, 50)}..."`);
+                                    }
+                                } catch (dbErr) {
+                                    console.error('Database Error:', dbErr);
+                                }
+                            } catch (parseErr) {
+                                console.error('Email Parse Error:', parseErr);
                             }
                         });
                     });
-
-                    // Mark as read after processing
-                    msg.once('attributes', (attrs) => {
-                        const uid = attrs.uid;
-                        imap.addFlags(uid, ['\\Seen'], (err) => {
-                            if (err) console.error('Error marking as read:', err);
-                        });
-                    });
                 });
 
-                f.once('error', (err) => {
-                    console.log('Fetch error: ' + err);
+                fetch.once('error', (err) => {
+                    console.error('Fetch Error:', err);
                 });
 
-                f.once('end', () => {
-                    console.log('Done fetching all messages!');
+                fetch.once('end', () => {
+                    console.log('✅ Email fetching completed');
                     imap.end();
                 });
             });
@@ -174,8 +207,10 @@ const fetchEmails = () => {
             console.error('❌ Gmail Authentication Failed! Please make sure you are using an APP PASSWORD, not your regular password.');
             console.error('🔗 How to generate: https://support.google.com/accounts/answer/185833');
         } else {
-            console.error('Imap Error:', err);
+            console.error('❌ IMAP Error:', err.message);
         }
+        // Don't crash, just log and end gracefully
+        imap.end();
     });
 
     imap.once('end', () => {
