@@ -25,11 +25,16 @@ CREATE TABLE IF NOT EXISTS leads (
 CREATE TABLE IF NOT EXISTS followups (
     id INT AUTO_INCREMENT PRIMARY KEY,
     lead_id INT NOT NULL,
+    salesman_id INT NOT NULL,
     followup_date DATE NOT NULL,
     remarks TEXT,
-    status ENUM('Pending', 'Completed') DEFAULT 'Pending',
+    status ENUM('Pending', 'Completed', 'Missed') DEFAULT 'Pending',
+    completion_date TIMESTAMP NULL,
+    completion_notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
+    FOREIGN KEY (salesman_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS bookings (

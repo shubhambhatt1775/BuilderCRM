@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, MessageSquare } from 'lucide-react';
+import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, MessageSquare, Target } from 'lucide-react';
 
 const SalesmanDashboard = () => {
     const { token, user, logout } = useAuth();
@@ -17,6 +17,8 @@ const SalesmanDashboard = () => {
     });
     const [activeTab, setActiveTab] = useState('active');
     const [viewMessage, setViewMessage] = useState(null);
+    const [showFollowupHistoryModal, setShowFollowupHistoryModal] = useState(false);
+    const [selectedLeadHistory, setSelectedLeadHistory] = useState(null);
 
     useEffect(() => {
         if (!token) return;
@@ -53,6 +55,23 @@ const SalesmanDashboard = () => {
             console.error('Error fetching followups:', error);
             if (error.response?.status === 401) {
                 logout();
+            }
+        }
+    };
+
+    const fetchLeadFollowupHistory = async (leadId) => {
+        try {
+            const res = await axios.get(`http://localhost:5000/api/leads/followup-history/lead/${leadId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setSelectedLeadHistory(res.data);
+            setShowFollowupHistoryModal(true);
+        } catch (err) {
+            console.error('Error fetching lead follow-up history:', err);
+            if (err.response?.status === 401) {
+                logout();
+            } else {
+                alert('Failed to fetch follow-up history');
             }
         }
     };
@@ -146,7 +165,7 @@ const SalesmanDashboard = () => {
             </div>
 
             <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                     <table className="w-full text-left table-auto">
                         <thead>
                             <tr className="bg-gray-50/50 text-[10px] text-gray-400 font-black uppercase tracking-widest border-b border-gray-100">
@@ -162,17 +181,28 @@ const SalesmanDashboard = () => {
                                 <tr>
                                     <td colSpan="5" className="px-6 py-12 text-center text-gray-300 italic font-medium">No {activeTab} leads available for processing.</td>
                                 </tr>
-                            ) : filteredLeads.map(lead => (
-                                <tr key={lead.id} className="hover:bg-blue-50/20 transition-all group">
+                            ) : filteredLeads.map(lead => {
+                                const hasTodayFollowup = todayFollowups.some(f => f.lead_id === lead.id);
+                                return (
+                                <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
                                     <td className="px-6 py-4">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-600 font-black text-lg">
-                                                {lead.sender_name?.[0] || 'A'}
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-600 font-black text-lg">
+                                                    {lead.sender_name?.[0] || 'A'}
+                                                </div>
+                                                <div>
+                                                    <div className="font-extrabold text-gray-900 text-sm">{lead.sender_name || 'Anonymous User'}</div>
+                                                    <div className="text-xs text-gray-400">{lead.sender_email}</div>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <div className="font-extrabold text-gray-900 text-sm">{lead.sender_name || 'Anonymous User'}</div>
-                                                <div className="text-xs text-gray-400">{lead.sender_email}</div>
-                                            </div>
+                                            {hasTodayFollowup && (
+                                                <div className="flex-shrink-0">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
+                                                        TODAY
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -224,7 +254,7 @@ const SalesmanDashboard = () => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="flex justify-center">
+                                        <div className="flex justify-center space-x-2">
                                             <button
                                                 onClick={() => {
                                                     setSelectedLead(lead);
@@ -235,10 +265,18 @@ const SalesmanDashboard = () => {
                                                 <ExternalLink size={12} />
                                                 <span>Update</span>
                                             </button>
+                                            <button
+                                                onClick={() => fetchLeadFollowupHistory(lead.id)}
+                                                className="text-amber-600 hover:text-amber-800 transition-colors"
+                                                title="View follow-up history"
+                                            >
+                                                <Clock size={16} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -489,6 +527,160 @@ const SalesmanDashboard = () => {
                                 Close
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Follow-up History Modal */}
+            {showFollowupHistoryModal && selectedLeadHistory && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
+                    <div className="bg-white rounded-[40px] p-8 max-w-4xl w-full shadow-2xl animate-in border border-white max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h2 className="text-3xl font-black text-gray-900 italic">Follow-up History</h2>
+                                <p className="text-gray-400 text-sm font-medium mt-1">
+                                    {selectedLeadHistory.leadDetails?.sender_name} - {selectedLeadHistory.leadDetails?.sender_email}
+                                </p>
+                            </div>
+                            <button 
+                                onClick={() => setShowFollowupHistoryModal(false)}
+                                className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition"
+                            >
+                                <XCircle size={28} />
+                            </button>
+                        </div>
+
+                        {/* Lead Summary */}
+                        <div className="bg-gray-50 rounded-2xl p-6 mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Lead Subject</span>
+                                    <p className="font-bold text-gray-900 mt-1">{selectedLeadHistory.leadDetails?.subject || 'No subject'}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Assigned To</span>
+                                    <p className="font-bold text-gray-900 mt-1">{selectedLeadHistory.leadDetails?.assigned_salesman || 'Unassigned'}</p>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Follow-ups</span>
+                                    <p className="font-bold text-gray-900 mt-1">{selectedLeadHistory.followupHistory?.length || 0}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Follow-up Timeline */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-black text-gray-900">Follow-up Timeline</h3>
+                            
+                            {selectedLeadHistory.followupHistory && selectedLeadHistory.followupHistory.length > 0 ? (
+                                <div className="relative">
+                                    <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-100"></div>
+                                    
+                                    <div className="space-y-6">
+                                        {selectedLeadHistory.followupHistory
+                                            .sort((a, b) => new Date(b.followup_date) - new Date(a.followup_date))
+                                            .map((followup, index) => (
+                                                <div key={followup.id} className="relative flex items-start space-x-4">
+                                                    <div className="relative z-10 w-16 h-16 bg-white rounded-full flex items-center justify-center border-4 border-white shadow-sm">
+                                                        <div className={`p-3 rounded-full ${
+                                                            followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                                                            followup.status === 'Pending' ? 'bg-amber-100 text-amber-600 border-amber-200' :
+                                                            followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
+                                                            'bg-gray-100 text-gray-600 border-gray-200'
+                                                        }`}>
+                                                            {followup.status === 'Completed' ? <CheckCircle size={20} /> :
+                                                             followup.status === 'Pending' ? <Clock size={20} /> :
+                                                             followup.status === 'Missed' ? <XCircle size={20} /> :
+                                                             <Target size={20} />}
+                                                        </div>
+                                                    </div>
+                                                    <div className={`flex-1 rounded-2xl p-4 border ${
+                                                        followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
+                                                        followup.status === 'Pending' ? 'bg-amber-50 border-amber-100' :
+                                                        followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
+                                                        'bg-gray-50 border-gray-100'
+                                                    }`}>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className={`text-xs font-black uppercase tracking-widest ${
+                                                                followup.status === 'Completed' ? 'text-emerald-600' :
+                                                                followup.status === 'Pending' ? 'text-amber-600' :
+                                                                followup.status === 'Missed' ? 'text-red-600' :
+                                                                'text-gray-600'
+                                                            }`}>
+                                                                {followup.status}
+                                                            </span>
+                                                            <span className="text-xs text-gray-400">
+                                                                {new Date(followup.followup_date).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                        
+                                                        <div className="mb-2">
+                                                            <span className="text-xs font-medium text-gray-500">Salesman:</span>
+                                                            <span className="text-xs text-gray-700 ml-2">{followup.salesman_name}</span>
+                                                        </div>
+
+                                                        {followup.remarks && (
+                                                            <div className="mb-2">
+                                                                <span className="text-xs font-medium text-gray-500">Remarks:</span>
+                                                                <p className="text-sm text-gray-700 mt-1">{followup.remarks}</p>
+                                                            </div>
+                                                        )}
+
+                                                        {followup.completion_date && (
+                                                            <div className="mb-2">
+                                                                <span className="text-xs font-medium text-gray-500">Completed on:</span>
+                                                                <span className="text-xs text-gray-700 ml-2">
+                                                                    {new Date(followup.completion_date).toLocaleDateString()} at {new Date(followup.completion_date).toLocaleTimeString()}
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {followup.completion_notes && (
+                                                            <div>
+                                                                <span className="text-xs font-medium text-gray-500">Completion Notes:</span>
+                                                                <p className="text-sm text-gray-700 mt-1">{followup.completion_notes}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-12">
+                                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Clock className="text-gray-400" size={24} />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">No Follow-up History</h3>
+                                    <p className="text-sm text-gray-500">No follow-up activities recorded for this lead yet</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Summary Stats */}
+                        {selectedLeadHistory.summary && (
+                            <div className="mt-6 bg-blue-50 rounded-2xl p-4">
+                                <h4 className="text-sm font-black text-blue-900 mb-3">Summary</h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                    <div>
+                                        <span className="text-gray-500">Total:</span>
+                                        <span className="font-bold text-gray-900 ml-2">{selectedLeadHistory.summary.totalFollowups}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Pending:</span>
+                                        <span className="font-bold text-amber-600 ml-2">{selectedLeadHistory.summary.pendingFollowups}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Completed:</span>
+                                        <span className="font-bold text-emerald-600 ml-2">{selectedLeadHistory.summary.completedFollowups}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500">Missed:</span>
+                                        <span className="font-bold text-red-600 ml-2">{selectedLeadHistory.summary.missedFollowups}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
