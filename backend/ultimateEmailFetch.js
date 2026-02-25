@@ -2,6 +2,7 @@ const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const pool = require('./config/db');
 const axios = require('axios');
+const whatsappService = require('./services/whatsappService');
 require('dotenv').config();
 
 /**
@@ -126,13 +127,55 @@ const fetchAllEmailsUltimate = async () => {
                                             );
 
                                             if (existing.length === 0) {
-                                                // Insert new lead into database
-                                                await pool.query(
-                                                    'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, whatsapp_status, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                                                    [senderName, senderEmail, phone, subject, body, 'New', 'Not Found', source]
+                                                // Insert new lead into database with WhatsApp fields
+                                                const [insertResult] = await pool.query(
+                                                    'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, source, whatsapp_greeting_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                                                    [senderName, senderEmail, phone, subject, body, 'New', source, false]
                                                 );
+                                                
+                                                const leadId = insertResult.insertId;
                                                 processedCount++;
                                                 console.log(` [${processedCount}] [${source}] NEW: ${senderEmail} - "${subject.substring(0, 50)}..."`);
+
+                                                // Send WhatsApp greeting if phone number is available
+                                                if (phone && phone.length >= 10) {
+                                                    try {
+                                                        console.log(`📱 Sending WhatsApp greeting for lead ${leadId} to ${phone}`);
+                                                        
+                                                        // Create greeting message from email content
+                                                        let greetingMessage = `Hello 👋\nWelcome ${senderName}!\n`;
+                                                        
+                                                        // Add subject if available
+                                                        if (subject && subject.trim()) {
+                                                            greetingMessage += `Regarding: ${subject}\n\n`;
+                                                        }
+                                                        
+                                                        // Add relevant part of email body (first 200 characters)
+                                                        if (body && body.trim()) {
+                                                            const cleanBody = body.replace(/\n+/g, ' ').trim();
+                                                            const shortBody = cleanBody.length > 200 ? cleanBody.substring(0, 200) + '...' : cleanBody;
+                                                            greetingMessage += `Message: ${shortBody}\n\n`;
+                                                        }
+                                                        
+                                                        greetingMessage += `Our salesman will reach you soon!!\n\nThanks for reaching out. Our team will contact you shortly.`;
+                                                        
+                                                        const greetingResult = await whatsappService.sendGreeting(phone, senderName, leadId, greetingMessage);
+                                                        
+                                                        if (greetingResult.success) {
+                                                            // Mark greeting as sent in database
+                                                            await whatsappService.markGreetingAsSent(leadId);
+                                                            console.log(`✅ WhatsApp greeting sent successfully for lead ${leadId}`);
+                                                        } else {
+                                                            console.log(`⚠️ WhatsApp greeting failed for lead ${leadId}: ${greetingResult.error}`);
+                                                        }
+                                                    } catch (whatsappError) {
+                                                        console.error(`❌ WhatsApp service error for lead ${leadId}:`, whatsappError.message);
+                                                        // Don't fail the lead creation process if WhatsApp fails
+                                                    }
+                                                } else {
+                                                    console.log(`📵 No valid phone number for lead ${leadId}, skipping WhatsApp greeting`);
+                                                    await whatsappService.logSkippedMessage(leadId, senderName, 'No valid phone number found');
+                                                }
                                             } else {
                                                 skippedCount++;
                                                 console.log(` [${skippedCount}] [${source}] SKIPPED: ${senderEmail} - "${subject.substring(0, 50)}..." (already in database)`);

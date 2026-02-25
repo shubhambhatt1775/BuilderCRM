@@ -36,4 +36,10 @@ router.get('/history/activities', auth, adminOnly, leadController.getRecentActiv
 router.get('/followup-status/all', auth, adminOnly, leadController.getAllFollowupStatusLeads);
 router.post('/check-missed-followups', auth, leadController.checkAndUpdateMissedFollowups);
 
+// WhatsApp Management routes
+router.post('/whatsapp/send/:leadId', auth, leadController.sendWhatsAppGreeting);
+router.post('/whatsapp/resend/:leadId', auth, leadController.resendWhatsAppGreeting);
+router.get('/whatsapp/stats', auth, adminOnly, leadController.getWhatsAppStats);
+router.get('/whatsapp/errors', auth, adminOnly, leadController.getWhatsAppErrors);
+
 module.exports = router;

@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const whatsappService = require('../services/whatsappService');
 
 exports.getAllLeads = async (req, res) => {
     try {
@@ -1213,6 +1214,180 @@ exports.getSalesmanFollowupHistoryById = async (req, res) => {
         
         res.json(followups);
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// WhatsApp Management Endpoints
+
+// Send WhatsApp greeting manually for a lead
+exports.sendWhatsAppGreeting = async (req, res) => {
+    const { leadId } = req.params;
+    try {
+        // Get lead details
+        const [lead] = await pool.query(
+            'SELECT id, sender_name, phone, subject, body, whatsapp_greeting_sent FROM leads WHERE id = ?',
+            [leadId]
+        );
+
+        if (lead.length === 0) {
+            return res.status(404).json({ error: 'Lead not found' });
+        }
+
+        const leadData = lead[0];
+
+        // Check if greeting already sent
+        if (leadData.whatsapp_greeting_sent) {
+            return res.status(400).json({ error: 'WhatsApp greeting already sent for this lead' });
+        }
+
+        // Check if phone number is available
+        if (!leadData.phone || leadData.phone.length < 10) {
+            return res.status(400).json({ error: 'No valid phone number available for this lead' });
+        }
+
+        // Create personalized greeting message from email content
+        let greetingMessage = `Hello 👋\nWelcome ${leadData.sender_name}!\n`;
+        
+        // Add subject if available
+        if (leadData.subject && leadData.subject.trim()) {
+            greetingMessage += `Regarding: ${leadData.subject}\n\n`;
+        }
+        
+        // Add relevant part of email body (first 200 characters)
+        if (leadData.body && leadData.body.trim()) {
+            const cleanBody = leadData.body.replace(/\n+/g, ' ').trim();
+            const shortBody = cleanBody.length > 200 ? cleanBody.substring(0, 200) + '...' : cleanBody;
+            greetingMessage += `Message: ${shortBody}\n\n`;
+        }
+        
+        greetingMessage += `Our salesman will reach you soon!!\n\nThanks for reaching out. Our team will contact you shortly.`;
+
+        // Send WhatsApp greeting
+        const result = await whatsappService.sendGreeting(
+            leadData.phone,
+            leadData.sender_name,
+            leadData.id,
+            greetingMessage
+        );
+
+        if (result.success) {
+            // Mark as sent in database
+            await whatsappService.markGreetingAsSent(leadId);
+            res.json({ 
+                message: 'WhatsApp greeting sent successfully',
+                result: result
+            });
+        } else {
+            res.status(500).json({ 
+                error: 'Failed to send WhatsApp greeting',
+                details: result.error
+            });
+        }
+    } catch (err) {
+        console.error('Error sending WhatsApp greeting:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get WhatsApp statistics
+exports.getWhatsAppStats = async (req, res) => {
+    try {
+        const stats = await whatsappService.getStats();
+        
+        // Get additional database statistics
+        const [dbStats] = await pool.query(`
+            SELECT 
+                COUNT(*) as total_leads,
+                SUM(CASE WHEN whatsapp_greeting_sent = TRUE THEN 1 ELSE 0 END) as greetings_sent,
+                SUM(CASE WHEN phone IS NOT NULL AND phone != '' AND whatsapp_greeting_sent = FALSE THEN 1 ELSE 0 END) as pending_greetings,
+                SUM(CASE WHEN phone IS NULL OR phone = '' THEN 1 ELSE 0 END) as no_phone_leads
+            FROM leads
+        `);
+
+        res.json({
+            serviceStats: stats,
+            databaseStats: dbStats[0]
+        });
+    } catch (err) {
+        console.error('Error getting WhatsApp stats:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get recent WhatsApp errors for debugging
+exports.getWhatsAppErrors = async (req, res) => {
+    try {
+        const { limit = 10 } = req.query;
+        const errors = await whatsappService.getRecentErrors(parseInt(limit));
+        res.json(errors);
+    } catch (err) {
+        console.error('Error getting WhatsApp errors:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Resend WhatsApp greeting for failed attempts
+exports.resendWhatsAppGreeting = async (req, res) => {
+    const { leadId } = req.params;
+    try {
+        // Get lead details
+        const [lead] = await pool.query(
+            'SELECT id, sender_name, phone, subject, body, whatsapp_greeting_sent FROM leads WHERE id = ?',
+            [leadId]
+        );
+
+        if (lead.length === 0) {
+            return res.status(404).json({ error: 'Lead not found' });
+        }
+
+        const leadData = lead[0];
+
+        // Check if phone number is available
+        if (!leadData.phone || leadData.phone.length < 10) {
+            return res.status(400).json({ error: 'No valid phone number available for this lead' });
+        }
+
+        // Create personalized greeting message from email content
+        let greetingMessage = `Hello 👋\nWelcome ${leadData.sender_name}!\n`;
+        
+        // Add subject if available
+        if (leadData.subject && leadData.subject.trim()) {
+            greetingMessage += `Regarding: ${leadData.subject}\n\n`;
+        }
+        
+        // Add relevant part of email body (first 200 characters)
+        if (leadData.body && leadData.body.trim()) {
+            const cleanBody = leadData.body.replace(/\n+/g, ' ').trim();
+            const shortBody = cleanBody.length > 200 ? cleanBody.substring(0, 200) + '...' : cleanBody;
+            greetingMessage += `Message: ${shortBody}\n\n`;
+        }
+        
+        greetingMessage += `Our salesman will reach you soon!!\n\nThanks for reaching out. Our team will contact you shortly.`;
+
+        // Send WhatsApp greeting
+        const result = await whatsappService.sendGreeting(
+            leadData.phone,
+            leadData.sender_name,
+            leadData.id,
+            greetingMessage
+        );
+
+        if (result.success) {
+            // Mark as sent in database
+            await whatsappService.markGreetingAsSent(leadId);
+            res.json({ 
+                message: 'WhatsApp greeting resent successfully',
+                result: result
+            });
+        } else {
+            res.status(500).json({ 
+                error: 'Failed to resend WhatsApp greeting',
+                details: result.error
+            });
+        }
+    } catch (err) {
+        console.error('Error resending WhatsApp greeting:', err);
         res.status(500).json({ error: err.message });
     }
 };

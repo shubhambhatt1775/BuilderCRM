@@ -1,7 +1,7 @@
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 const pool = require('../config/db');
-const axios = require('axios');
+const whatsappService = require('./whatsappService');
 require('dotenv').config();
 
 /**
@@ -111,9 +111,7 @@ const fetchEmails = () => {
                                     source = 'Vercel';
                                 }
 
-                                // WhatsApp API configuration check
-                                const whatsappToken = process.env.WHATSAPP_TOKEN;
-                                const whatsappPhoneId = process.env.WHATSAPP_PHONE_ID;
+                                // Initial WhatsApp status
                                 let whatsappStatus = 'Not Configured';
 
                                 // Check for duplicate emails (same sender + subject within last day)
@@ -132,48 +130,62 @@ const fetchEmails = () => {
                                         processedCount++;
                                         console.log(`✅ [${processedCount}/${results.length}] [${source}] New lead: ${senderEmail} - "${subject.substring(0, 50)}..."`);
 
-                                        // Send WhatsApp greeting if configured and phone number exists
-                                        if (phone && whatsappToken && whatsappPhoneId) {
-                                            try {
-                                                const response = await axios.post(`https://graph.facebook.com/v18.0/${whatsappPhoneId}/messages`, {
-                                                    messaging_product: 'whatsapp',
-                                                    to: `+${phone}`,
-                                                    type: 'template',
-                                                    template: {
-                                                        name: process.env.WHATSAPP_GREETING_TEMPLATE || 'hello_world',
-                                                        language: {
-                                                            code: 'en'
-                                                        }
-                                                    }
-                                                }, {
-                                                    headers: {
-                                                        'Authorization': `Bearer ${whatsappToken}`,
-                                                        'Content-Type': 'application/json'
-                                                    }
-                                                });
+                                        // Get the newly created lead ID
+                                        const [newLead] = await pool.query(
+                                            'SELECT id FROM leads WHERE sender_email = ? AND subject = ? ORDER BY id DESC LIMIT 1',
+                                            [senderEmail, subject]
+                                        );
+                                        
+                                        const leadId = newLead[0]?.id;
 
-                                                if (response.status === 200) {
-                                                    whatsappStatus = 'Sent';
-                                                    console.log(`📱 WhatsApp sent to +${phone}`);
+                                        // Send WhatsApp greeting using the WhatsApp service
+                                        let whatsappStatus = 'Not Configured';
+                                        if (phone && leadId) {
+                                            try {
+                                                // Check if greeting was already sent
+                                                const alreadySent = await whatsappService.wasGreetingSent(phone);
+                                                if (alreadySent) {
+                                                    whatsappStatus = 'Already Sent';
+                                                    console.log(`📱 WhatsApp greeting already sent to ${phone}`);
                                                 } else {
-                                                    whatsappStatus = 'Failed';
-                                                    console.log(`❌ WhatsApp failed for +${phone}: ${response.status}`);
+                                                    // Send greeting
+                                                    const result = await whatsappService.sendGreeting(phone, senderName, leadId);
+                                                    
+                                                    if (result.success) {
+                                                        whatsappStatus = 'Sent';
+                                                        // Mark as sent in database
+                                                        await whatsappService.markGreetingAsSent(leadId);
+                                                        console.log(`📱 WhatsApp greeting sent to ${phone}`);
+                                                    } else {
+                                                        whatsappStatus = 'Failed';
+                                                        console.log(`❌ WhatsApp greeting failed for ${phone}: ${result.error}`);
+                                                    }
                                                 }
 
                                                 // Update WhatsApp status in database
                                                 await pool.query(
-                                                    'UPDATE leads SET whatsapp_status = ? WHERE sender_email = ? AND subject = ?',
-                                                    [whatsappStatus, senderEmail, subject]
+                                                    'UPDATE leads SET whatsapp_status = ? WHERE id = ?',
+                                                    [whatsappStatus, leadId]
                                                 );
 
                                             } catch (whatsappErr) {
-                                                console.error('WhatsApp API Error:', whatsappErr.response?.data || whatsappErr.message);
+                                                console.error('WhatsApp Service Error:', whatsappErr.message);
                                                 whatsappStatus = 'Failed';
                                                 
                                                 // Update status even on failure
+                                                if (leadId) {
+                                                    await pool.query(
+                                                        'UPDATE leads SET whatsapp_status = ? WHERE id = ?',
+                                                        [whatsappStatus, leadId]
+                                                    );
+                                                }
+                                            }
+                                        } else {
+                                            whatsappStatus = phone ? 'No Phone' : 'Not Configured';
+                                            if (leadId) {
                                                 await pool.query(
-                                                    'UPDATE leads SET whatsapp_status = ? WHERE sender_email = ? AND subject = ?',
-                                                    [whatsappStatus, senderEmail, subject]
+                                                    'UPDATE leads SET whatsapp_status = ? WHERE id = ?',
+                                                    [whatsappStatus, leadId]
                                                 );
                                             }
                                         }
