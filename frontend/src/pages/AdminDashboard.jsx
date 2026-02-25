@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, User, Clock, CheckCircle, XCircle, TrendingUp, Target, BarChart2, RefreshCw, ExternalLink, Phone, MessageSquare } from 'lucide-react';
 
 // Rupee Icon Component
@@ -22,6 +23,7 @@ const RupeeIcon = ({ size = 16, className = "" }) => (
 
 const AdminDashboard = () => {
     const { token, logout } = useAuth();
+    const navigate = useNavigate();
     const [leads, setLeads] = useState([]);
     const [salesmen, setSalesmen] = useState([]);
     const [reports, setReports] = useState(null);
@@ -33,27 +35,91 @@ const AdminDashboard = () => {
     const [lastSync, setLastSync] = useState(new Date().toLocaleTimeString());
     const [followupStatusLeads, setFollowupStatusLeads] = useState([]);
     const [followupStats, setFollowupStats] = useState(null);
+    const [totalMissedLeads, setTotalMissedLeads] = useState(0);
+    const [salesmenMissedLeads, setSalesmenMissedLeads] = useState({});
     const [showFollowupHistoryModal, setShowFollowupHistoryModal] = useState(false);
     const [selectedLeadHistory, setSelectedLeadHistory] = useState(null);
     const [viewMessage, setViewMessage] = useState(null);
 
+    const checkMissedFollowups = async () => {
+        try {
+            await axios.post('http://localhost:5000/api/leads/check-missed-followups', {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // Use the summary data from followupStatusLeads if available
+            if (followupStats && followupStats.overdue_followup_leads !== undefined) {
+                setTotalMissedLeads(followupStats.overdue_followup_leads);
+            }
+        } catch (error) {
+            console.error('Error checking missed follow-ups:', error);
+        }
+    };
+
+    const hasMissedFollowup = (lead) => {
+        // Check if lead has any missed follow-ups in the followup history
+        if (followupStatusLeads) {
+            const leadWithHistory = followupStatusLeads.find(l => l.id === lead.id);
+            if (leadWithHistory && leadWithHistory.followupHistory) {
+                return leadWithHistory.followupHistory.some(f => f.urgency_status === 'overdue' || f.status === 'Missed');
+            }
+        }
+        return false;
+    };
+
+    const getNextFollowupDate = (lead) => {
+        // Get the next follow-up date from followup status leads
+        if (followupStatusLeads) {
+            const leadWithHistory = followupStatusLeads.find(l => l.id === lead.id);
+            if (leadWithHistory && leadWithHistory.followupHistory) {
+                const pendingFollowup = leadWithHistory.followupHistory.find(f => f.status === 'Pending');
+                if (pendingFollowup) {
+                    return new Date(pendingFollowup.followup_date).toLocaleDateString();
+                }
+                const missedFollowup = leadWithHistory.followupHistory.find(f => f.status === 'Missed');
+                if (missedFollowup) {
+                    return new Date(missedFollowup.followup_date).toLocaleDateString();
+                }
+            }
+        }
+        return null;
+    };
+
     useEffect(() => {
         if (!token) return;
 
+        checkMissedFollowups(); // Check for missed follow-ups first
         fetchLeads();
         fetchSalesmen();
         fetchReports();
         fetchFollowupStatusLeads();
+        fetchAllSalesmenMissedLeads(); // Fetch missed leads for all salesmen
+        fetchTotalMissedLeads(); // Fetch total missed leads count
 
         // Auto-refresh data every 30 seconds
         const pollInterval = setInterval(() => {
+            checkMissedFollowups(); // Also check in refresh cycle
             fetchLeads();
             fetchReports();
             fetchFollowupStatusLeads();
+            fetchAllSalesmenMissedLeads(); // Fetch missed leads for all salesmen
+            fetchTotalMissedLeads(); // Fetch total missed leads count
         }, 30000);
 
         return () => clearInterval(pollInterval);
     }, [token]);
+
+    useEffect(() => {
+        if (selectedSalesman) {
+            fetchSelectedSalesmanMissedLeads();
+        }
+    }, [selectedSalesman]);
+
+    useEffect(() => {
+        // Update total missed leads when followupStats changes
+        if (followupStats && followupStats.overdue_followup_leads !== undefined) {
+            setTotalMissedLeads(followupStats.overdue_followup_leads);
+        }
+    }, [followupStats]);
 
     const fetchLeads = async () => {
         try {
@@ -63,7 +129,7 @@ const AdminDashboard = () => {
             setLeads(res.data);
             setLastSync(new Date().toLocaleTimeString());
         } catch (err) {
-            console.error(err);
+            console.error('Error fetching leads:', err);
             if (err.response?.status === 401) {
                 logout();
             }
@@ -91,7 +157,7 @@ const AdminDashboard = () => {
             });
             setReports(res.data);
         } catch (err) {
-            console.error(err);
+            console.error('Error fetching admin reports:', err);
             if (err.response?.status === 401) {
                 logout();
             }
@@ -118,7 +184,30 @@ const AdminDashboard = () => {
             const res = await axios.get(`http://localhost:5000/api/leads/followup-history/lead/${leadId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setSelectedLeadHistory(res.data);
+            
+            // Process follow-up history to identify missed follow-ups
+            const processedHistory = res.data.followupHistory.map(followup => {
+                const followupDate = new Date(followup.followup_date);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                followupDate.setHours(0, 0, 0, 0);
+                
+                // If status is Pending and due date has passed, mark as missed
+                if (followup.status === 'Pending' && followupDate < today) {
+                    return {
+                        ...followup,
+                        status: 'Missed',
+                        completion_date: new Date().toISOString(),
+                        completion_notes: 'Automatically marked as missed - due date passed'
+                    };
+                }
+                return followup;
+            });
+            
+            setSelectedLeadHistory({
+                ...res.data,
+                followupHistory: processedHistory
+            });
             setShowFollowupHistoryModal(true);
         } catch (err) {
             console.error('Error fetching lead follow-up history:', err);
@@ -177,36 +266,75 @@ const AdminDashboard = () => {
         return reports?.overallStatus?.find(s => s.status === status)?.count || 0;
     };
 
+    const fetchTotalMissedLeads = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/leads/missed-count', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setTotalMissedLeads(res.data.totalMissed);
+        } catch (err) {
+            console.error('Error fetching total missed leads:', err);
+        }
+    };
+
+    const fetchSelectedSalesmanMissedLeads = async () => {
+        if (!selectedSalesman) {
+            setTotalMissedLeads(0);
+            return;
+        }
+        
+        try {
+            const res = await axios.get(`http://localhost:5000/api/leads/kpi/${selectedSalesman}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setTotalMissedLeads(res.data.missed);
+        } catch (err) {
+            console.error('Error fetching selected salesman missed leads:', err);
+            setTotalMissedLeads(0);
+        }
+    };
+
+    const fetchAllSalesmenMissedLeads = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/users/salesmen', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            const missedLeadsData = {};
+            
+            // Fetch missed leads for each salesman
+            for (const salesman of res.data) {
+                try {
+                    const kpiRes = await axios.get(`http://localhost:5000/api/leads/kpi/${salesman.id}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    missedLeadsData[salesman.id] = kpiRes.data.missed;
+                } catch (err) {
+                    console.error(`Error fetching missed leads for salesman ${salesman.id}:`, err);
+                    missedLeadsData[salesman.id] = 0;
+                }
+            }
+            
+            setSalesmenMissedLeads(missedLeadsData);
+        } catch (err) {
+            console.error('Error fetching salesmen:', err);
+        }
+    };
+
+    const getTotalMissedLeads = () => {
+        // Calculate total missed leads from all salesmen
+        if (!salesmenMissedLeads || Object.keys(salesmenMissedLeads).length === 0) return 0;
+        return Object.values(salesmenMissedLeads).reduce((total, missed) => total + missed, 0);
+    };
+
+    const getMissedLeadsBySalesman = (salesmanId) => {
+        // Return the real missed leads count from the salesmenMissedLeads state
+        return salesmenMissedLeads[salesmanId] || 0;
+    };
+
     return (
         <div className="bg-gray-50/50 min-h-screen">
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 lg:space-y-10">
-                {/* Mobile-friendly touch targets */}
-                <style jsx>{`
-                    @media (max-width: 640px) {
-                        button, a {
-                            min-height: 44px;
-                            min-width: 44px;
-                        }
-                        input, select, textarea {
-                            min-height: 44px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar {
-                            width: 4px;
-                            height: 4px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-track {
-                            background: #f1f1f1;
-                            border-radius: 10px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-thumb {
-                            background: #888;
-                            border-radius: 10px;
-                        }
-                        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                            background: #555;
-                        }
-                    }
-                `}</style>
                 {/* Premium Glass Header */}
                 <header className="flex flex-col justify-between items-start p-4 sm:p-6 bg-white border border-gray-100 rounded-2xl sm:rounded-3xl shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 sm:w-64 sm:h-64 bg-blue-50 rounded-full blur-3xl opacity-50 -mr-16 -mt-16 sm:-mr-32 sm:-mt-32"></div>
@@ -251,23 +379,34 @@ const AdminDashboard = () => {
                 </header>
 
                 {/* Tracking Stats Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                        { label: 'Total Leads', value: leads.length, icon: <Mail />, color: 'blue' },
-                        { label: 'Deals Won', value: getStatusCount('Deal Won'), icon: <TrendingUp />, color: 'emerald' },
-                        { label: 'In Pipeline', value: getStatusCount('Assigned') + getStatusCount('Follow-up'), icon: <Target />, color: 'amber' },
-                        { label: 'Revenue Generated', value: `₹${reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue), 0).toLocaleString() || 0}`, icon: <RupeeIcon />, color: 'indigo' }
-                    ].map((stat, i) => (
-                        <div key={i} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-3 sm:space-x-4 hover:shadow-md transition-all">
-                            <div className={`p-3 sm:p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl sm:rounded-2xl flex-shrink-0`}>
-                                {stat.icon}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {(() => {
+                        const totalLeads = leads.length || 0;
+                        const dealsWon = leads.filter(l => l.status === 'Deal Won').length || 0;
+                        const inPipeline = leads.filter(l => l.status === 'Assigned' || l.status === 'Follow-up').length || 0;
+                        const missedLeads = getTotalMissedLeads(); // Use calculated total from all salesmen
+                        const revenue = reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue || 0), 0).toLocaleString() || 0;
+                        
+                        const stats = [
+                            { label: 'Total Leads', value: totalLeads, icon: <Mail />, color: 'blue' },
+                            { label: 'Deals Won', value: dealsWon, icon: <TrendingUp />, color: 'emerald' },
+                            { label: 'In Pipeline', value: inPipeline, icon: <Target />, color: 'amber' },
+                            { label: 'Missed Leads', value: missedLeads, icon: <XCircle />, color: 'red' },
+                            { label: 'Revenue Generated', value: `₹${revenue}`, icon: <RupeeIcon />, color: 'indigo' }
+                        ];
+                        
+                        return stats.map((stat, i) => (
+                            <div key={i} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-3 sm:space-x-4 hover:shadow-md transition-all">
+                                <div className={`p-3 sm:p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl sm:rounded-2xl flex-shrink-0`}>
+                                    {stat.icon}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <span className="text-[10px] font-black text-gray-400 capitalize tracking-widest block mb-0.5">{stat.label}</span>
+                                    <span className="text-lg sm:text-2xl font-black text-gray-900 leading-none truncate">{stat.value}</span>
+                                </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <span className="text-[10px] font-black text-gray-400 capitalize tracking-widest block mb-0.5">{stat.label}</span>
-                                <span className="text-lg sm:text-2xl font-black text-gray-900 leading-none truncate">{stat.value}</span>
-                            </div>
-                        </div>
-                    ))}
+                        ));
+                    })()}
                 </div>
 
                 {/* Tabbed Interface */}
@@ -385,13 +524,33 @@ const AdminDashboard = () => {
                                                     )}
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'New' ? 'bg-blue-50 text-blue-700 ring-blue-700/10' :
-                                                        lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
-                                                            lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
-                                                                'bg-gray-50 text-gray-600 ring-gray-600/10'
-                                                        }`}>
-                                                        {lead.status}
-                                                    </span>
+                                                    <div className="space-y-2">
+                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${
+                                                            lead.status === 'Follow-up' && hasMissedFollowup(lead) ? 
+                                                                'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
+                                                            lead.status === 'New' ? 'bg-blue-50 text-blue-700 ring-blue-700/10' :
+                                                            lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
+                                                                lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                                    'bg-gray-50 text-gray-600 ring-gray-600/10'
+                                                            }`}>
+                                                            {lead.status}
+                                                        </span>
+                                                        {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
+                                                            <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                                                MISSED
+                                                            </div>
+                                                        )}
+                                                        {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
+                                                            <div className={`text-xs font-medium px-2 py-1 rounded border ${
+                                                                hasMissedFollowup(lead) ? 
+                                                                    'text-red-700 bg-red-100 border-red-300 font-bold' : 
+                                                                    'text-amber-700 bg-amber-50 border-amber-200'
+                                                            }`}>
+                                                                📅 {getNextFollowupDate(lead)}
+                                                                {hasMissedFollowup(lead) && ' (Overdue)'}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-3 sm:py-4">
                                                     <div className="flex justify-center">
@@ -452,9 +611,7 @@ const AdminDashboard = () => {
                                         <span className="text-xs font-black text-red-700 uppercase tracking-widest">Overdue</span>
                                     </div>
                                     <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">
-                                        {followupStatusLeads.filter(lead => 
-                                            lead.followupHistory.some(f => f.urgency_status === 'overdue')
-                                        ).length}
+                                        {getTotalMissedLeads()}
                                     </h3>
                                     <p className="text-xs sm:text-sm text-red-700 font-medium">Overdue Follow-ups</p>
                                 </div>
@@ -698,6 +855,7 @@ const AdminDashboard = () => {
                                                 <th className="p-8">Workload</th>
                                                 <th className="p-8">Conversion (Won)</th>
                                                 <th className="p-8">Lost Opportunity</th>
+                                                <th className="p-8">Missed Leads</th>
                                                 <th className="p-8">Total Revenue</th>
                                                 <th className="p-8">Success Rate</th>
                                             </tr>
@@ -709,9 +867,10 @@ const AdminDashboard = () => {
                                                 const lost = parseInt(s.deals_lost) || 0;
                                                 const rate = total > 0 ? ((won / total) * 100).toFixed(1) : 0;
                                                 const revenue = parseFloat(s.total_revenue) || 0;
+                                                const missedLeads = getMissedLeadsBySalesman(s.id);
 
                                                 return (
-                                                    <tr key={s.id} className="hover:bg-blue-50/20 transition-all">
+                                                    <tr key={s.id} className="hover:bg-blue-50/20 transition-all cursor-pointer" onClick={() => navigate(`/salesman-dashboard/${s.id}`)}>
                                                         <td className="p-8">
                                                             <div className="flex items-center space-x-4">
                                                                 <div className="w-12 h-12 bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl flex items-center justify-center text-white font-black text-xl">
@@ -740,6 +899,13 @@ const AdminDashboard = () => {
                                                                 <span className="font-black text-lg">{s.deals_lost}</span>
                                                             </div>
                                                             <div className="mt-1 text-xs text-red-500 font-medium">Lost Deals</div>
+                                                        </td>
+                                                        <td className="p-8">
+                                                            <div className={`flex items-center space-x-2 ${missedLeads > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                                                                <Clock size={16} />
+                                                                <span className="font-black text-lg">{missedLeads}</span>
+                                                            </div>
+                                                            <div className="mt-1 text-xs font-medium">Missed Follow-ups</div>
                                                         </td>
                                                         <td className="p-8">
                                                             <div className="font-black text-gray-900 text-xl font-mono">₹{revenue.toLocaleString()}</div>

@@ -24,6 +24,7 @@ const SalesmanDashboard = () => {
     const { token, user, logout } = useAuth();
     const [leads, setLeads] = useState([]);
     const [todayFollowups, setTodayFollowups] = useState([]);
+    const [overdueFollowups, setOverdueFollowups] = useState([]);
     const [showReminder, setShowReminder] = useState(false);
     const [selectedLead, setSelectedLead] = useState(null);
     const [statusUpdate, setStatusUpdate] = useState({
@@ -36,11 +37,71 @@ const SalesmanDashboard = () => {
     const [viewMessage, setViewMessage] = useState(null);
     const [showFollowupHistoryModal, setShowFollowupHistoryModal] = useState(false);
     const [selectedLeadHistory, setSelectedLeadHistory] = useState(null);
+    const [kpiData, setKpiData] = useState({
+        total: 0,
+        won: 0,
+        missed: 0,
+        successRate: 0.0
+    });
+
+    const fetchKPIData = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/leads/kpi', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            const newKpiData = {
+                total: parseInt(res.data.total) || 0,
+                won: parseInt(res.data.won) || 0,
+                missed: parseInt(res.data.missed) || 0,
+                successRate: parseFloat(res.data.successRate) || 0.0
+            };
+            
+            setKpiData(newKpiData);
+        } catch (error) {
+            console.error('Error fetching KPI data:', error);
+            if (error.response?.status === 401) {
+                logout();
+            }
+        }
+    };
+
+    const checkMissedFollowups = async () => {
+        try {
+            await axios.post('http://localhost:5000/api/leads/check-missed-followups', {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.error('Error checking missed follow-ups:', error);
+        }
+    };
+
+    const hasMissedFollowup = (lead) => {
+        // Check if lead has any missed follow-ups
+        return overdueFollowups.some(f => f.lead_id === lead.id);
+    };
+
+    const getNextFollowupDate = (lead) => {
+        // Get the next follow-up date from today's followups
+        const followup = todayFollowups.find(f => f.lead_id === lead.id);
+        if (followup) {
+            return new Date(followup.followup_date).toLocaleDateString();
+        }
+        // Check overdue followups
+        const overdueFollowup = overdueFollowups.find(f => f.lead_id === lead.id);
+        if (overdueFollowup) {
+            return new Date(overdueFollowup.followup_date).toLocaleDateString();
+        }
+        return null;
+    };
 
     useEffect(() => {
         if (!token) return;
+        checkMissedFollowups(); // Check for missed follow-ups first
         fetchLeads();
         fetchTodayFollowups();
+        fetchOverdueFollowups();
+        fetchKPIData();
     }, [token]);
 
     const fetchLeads = async () => {
@@ -51,6 +112,36 @@ const SalesmanDashboard = () => {
             setLeads(res.data);
         } catch (error) {
             console.error('Error fetching leads:', error);
+            if (error.response?.status === 401) {
+                logout();
+            }
+        }
+    };
+
+    const fetchOverdueFollowups = async () => {
+        try {
+            const today = new Date().toISOString().split('T')[0];
+            console.log('Today:', today);
+            
+            // Get all follow-ups for this salesman
+            const res = await axios.get(`http://localhost:5000/api/leads/followup-history/my-followups`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            console.log('All followups fetched:', res.data);
+            
+            // Filter for overdue follow-ups (due date before today and still pending)
+            const overdue = res.data.filter(f => {
+                const followupDate = new Date(f.followup_date).toISOString().split('T')[0];
+                const isOverdue = followupDate < today && f.status === 'Pending';
+                console.log(`Followup ${f.id}: ${followupDate} vs ${today}, status: ${f.status} = ${isOverdue}`);
+                return isOverdue;
+            });
+            
+            console.log('Overdue followups:', overdue);
+            setOverdueFollowups(overdue);
+        } catch (error) {
+            console.error('Error fetching overdue followups:', error);
             if (error.response?.status === 401) {
                 logout();
             }
@@ -81,7 +172,30 @@ const SalesmanDashboard = () => {
             const res = await axios.get(`http://localhost:5000/api/leads/followup-history/lead/${leadId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setSelectedLeadHistory(res.data);
+            
+            // Process follow-up history to identify missed follow-ups
+            const processedHistory = res.data.followupHistory.map(followup => {
+                const followupDate = new Date(followup.followup_date);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                followupDate.setHours(0, 0, 0, 0);
+                
+                // If status is Pending and due date has passed, mark as missed
+                if (followup.status === 'Pending' && followupDate < today) {
+                    return {
+                        ...followup,
+                        status: 'Missed',
+                        completion_date: new Date().toISOString(),
+                        completion_notes: 'Automatically marked as missed - due date passed'
+                    };
+                }
+                return followup;
+            });
+            
+            setSelectedLeadHistory({
+                ...res.data,
+                followupHistory: processedHistory
+            });
             setShowFollowupHistoryModal(true);
         } catch (err) {
             console.error('Error fetching lead follow-up history:', err);
@@ -103,6 +217,7 @@ const SalesmanDashboard = () => {
             setSelectedLead(null);
             fetchLeads();
             fetchTodayFollowups();
+            fetchKPIData();
             alert('Lead status successfully updated!');
         } catch (error) {
             console.error(error);
@@ -148,23 +263,30 @@ const SalesmanDashboard = () => {
                             </span>
                         )}
                     </button>
-                    <button onClick={fetchLeads} className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-black transition shadow-xl">Refresh Data</button>
+                    <button onClick={() => {
+                        fetchLeads();
+                        fetchKPIData();
+                    }} className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-black transition shadow-xl">Refresh Data</button>
                 </div>
             </header>
 
             {/* Insight Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-3xl border border-blue-100 shadow-sm">
-                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">Active Pipeline</div>
-                    <div className="text-3xl font-black text-blue-600">{stats.active} <span className="text-sm font-medium text-gray-400">Leads</span></div>
+                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">TOTAL</div>
+                    <div className="text-3xl font-black text-blue-600">{kpiData.total} <span className="text-sm font-medium text-gray-400">Leads Assigned</span></div>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-green-100 shadow-sm">
-                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">Deals Won</div>
-                    <div className="text-3xl font-black text-green-600">{stats.won} <span className="text-sm font-medium text-gray-400">Bookings</span></div>
+                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">WON</div>
+                    <div className="text-3xl font-black text-green-600">{kpiData.won} <span className="text-sm font-medium text-gray-400">Deals Closed</span></div>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-red-100 shadow-sm">
-                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">Closed/Lost</div>
-                    <div className="text-3xl font-black text-gray-400">{stats.lost} <span className="text-sm font-medium text-gray-300">Leads</span></div>
+                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">MISSED</div>
+                    <div className="text-3xl font-black text-red-600">{kpiData.missed} <span className="text-sm font-medium text-gray-400">Overdue Follow-ups</span></div>
+                </div>
+                <div className="bg-white p-6 rounded-3xl border border-purple-100 shadow-sm">
+                    <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">RATE</div>
+                    <div className="text-3xl font-black text-purple-600">{kpiData.successRate}% <span className="text-sm font-medium text-gray-400">Success Rate</span></div>
                 </div>
             </div>
 
@@ -200,8 +322,14 @@ const SalesmanDashboard = () => {
                                 </tr>
                             ) : filteredLeads.map(lead => {
                                 const hasTodayFollowup = todayFollowups.some(f => f.lead_id === lead.id);
+                                const hasMissedFollowupLocal = overdueFollowups.some(f => f.lead_id === lead.id);
+                                console.log(`Lead ${lead.id}: hasMissedFollowupLocal = ${hasMissedFollowupLocal}, overdueFollowups = ${overdueFollowups.length}`);
                                 return (
-                                <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
+                                <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${
+                                    hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : 
+                                    hasMissedFollowupLocal ? 'bg-red-50/50 border-l-4 border-red-500' :
+                                    (lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) ? 'bg-red-100 border-l-4 border-red-500' : ''
+                                }`}>
                                     <td className="px-6 py-4">
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-center space-x-3">
@@ -209,7 +337,14 @@ const SalesmanDashboard = () => {
                                                     {lead.sender_name?.[0] || 'A'}
                                                 </div>
                                                 <div>
-                                                    <div className="font-extrabold text-gray-900 text-sm">{lead.sender_name || 'Anonymous User'}</div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <div className="font-extrabold text-gray-900 text-sm">{lead.sender_name || 'Anonymous User'}</div>
+                                                        {hasMissedFollowupLocal && (
+                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-red-100 text-red-800 border border-red-200 animate-pulse">
+                                                                MISSED
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <div className="text-xs text-gray-400">{lead.sender_email}</div>
                                                 </div>
                                             </div>
@@ -260,15 +395,40 @@ const SalesmanDashboard = () => {
                                         >
                                             <div className="font-bold text-[10px] text-gray-400 mb-0.5 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
                                             <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
+                                            {(lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) && (
+                                                <div className="mt-2 text-xs font-bold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 animate-pulse">
+                                                    MISSED LEAD
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
-                                            lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
-                                                'bg-blue-50 text-blue-700 ring-blue-700/10'
+                                        <div className="space-y-2">
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${
+                                                lead.status === 'Follow-up' && hasMissedFollowup(lead) ? 
+                                                    'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
+                                                lead.status === 'Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
+                                                    'bg-blue-50 text-blue-700 ring-blue-700/10'
                                             }`}>
-                                            {lead.status}
-                                        </span>
+                                                {lead.status}
+                                            </span>
+                                            {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
+                                                <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                                    MISSED
+                                                </div>
+                                            )}
+                                            {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
+                                                <div className={`text-xs font-medium px-2 py-1 rounded border ${
+                                                    hasMissedFollowup(lead) ? 
+                                                        'text-red-700 bg-red-100 border-red-300 font-bold' : 
+                                                        'text-amber-700 bg-amber-50 border-amber-200'
+                                                }`}>
+                                                    📅 {getNextFollowupDate(lead)}
+                                                    {hasMissedFollowup(lead) && ' (Overdue)'}
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex justify-center space-x-2">

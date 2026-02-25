@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import SalesmanDashboard from './pages/SalesmanDashboard';
+import SalesmanDetailView from './pages/SalesmanDetailView';
 import { LogOut, LayoutDashboard, User } from 'lucide-react';
 
 const ProtectedRoute = ({ children, role }) => {
@@ -68,6 +69,11 @@ function App() {
                     <Route path="/salesman" element={
                         <ProtectedRoute role="salesman">
                             <SalesmanDashboard />
+                        </ProtectedRoute>
+                    } />
+                    <Route path="/salesman-dashboard/:salesmanId" element={
+                        <ProtectedRoute role="admin">
+                            <SalesmanDetailView />
                         </ProtectedRoute>
                     } />
                     <Route path="/" element={<DashboardRedirect />} />

@@ -208,6 +208,252 @@ exports.getSalesmanFollowupHistory = async (req, res) => {
     }
 };
 
+// Get KPI data for a specific salesman (admin endpoint)
+exports.getSalesmanKPIById = async (req, res) => {
+    try {
+        const { salesmanId } = req.params;
+        
+        console.log('🔍 ADMIN KPI REQUEST - Salesman ID:', salesmanId);
+        
+        // Get ALL leads for this salesman with detailed info
+        const [allLeads] = await pool.query(`
+            SELECT id, sender_name, status, assigned_to, created_at
+            FROM leads 
+            WHERE assigned_to = ?
+            ORDER BY created_at DESC
+        `, [salesmanId]);
+        
+        console.log('🔍 ADMIN KPI - Found leads:', allLeads.length);
+        
+        // Count by status manually to be sure
+        const statusCounts = {
+            'New': 0,
+            'Assigned': 0,
+            'Follow-up': 0,
+            'Deal Won': 0,
+            'Not Interested': 0,
+            'WON': 0,
+            'Won': 0,
+            'DEAL WON': 0
+        };
+        
+        allLeads.forEach(lead => {
+            if (statusCounts.hasOwnProperty(lead.status)) {
+                statusCounts[lead.status]++;
+            }
+        });
+        
+        // Calculate total and won deals
+        const totalAssigned = allLeads.length;
+        const wonDeals = statusCounts['Deal Won'] + statusCounts['WON'] + statusCounts['Won'] + statusCounts['DEAL WON'];
+        
+        console.log('🔍 ADMIN KPI - Total:', totalAssigned, 'Won:', wonDeals);
+        
+        // NEW APPROACH: Check each lead's latest follow-up date
+        let missedCount = 0;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Check each lead individually
+        for (const lead of allLeads) {
+            // Skip leads that are already won or not interested
+            if (lead.status === 'Deal Won' || lead.status === 'Not Interested' || 
+                lead.status === 'Won' || lead.status === 'WON' || lead.status === 'DEAL WON') {
+                continue;
+            }
+            
+            // Get the latest follow-up for this lead
+            const [latestFollowup] = await pool.query(`
+                SELECT followup_date, status
+                FROM followups 
+                WHERE lead_id = ? 
+                ORDER BY followup_date DESC 
+                LIMIT 1
+            `, [lead.id]);
+            
+            if (latestFollowup.length > 0) {
+                const followup = latestFollowup[0];
+                const followupDate = new Date(followup.followup_date).toISOString().split('T')[0];
+                
+                // Check if follow-up date is past (overdue)
+                if (followupDate < today) {
+                    missedCount++;
+                }
+            }
+        }
+        
+        const totalRealMissedCount = missedCount;
+        
+        console.log('🔍 ADMIN KPI - Missed:', totalRealMissedCount);
+        
+        // Calculate success rate
+        const successRate = totalAssigned > 0 ? ((wonDeals / totalAssigned) * 100).toFixed(1) : '0.0';
+        
+        const result = {
+            total: totalAssigned,
+            won: wonDeals,
+            missed: totalRealMissedCount,
+            successRate: parseFloat(successRate)
+        };
+        
+        console.log('🔍 ADMIN KPI - FINAL RESULT:', result);
+        
+        res.json(result);
+    } catch (err) {
+        console.error('❌ ADMIN KPI CALCULATION ERROR:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get total missed leads across all salesmen (for admin dashboard)
+exports.getAllSalesmenMissedCount = async (req, res) => {
+    try {
+        console.log('🔍 GETTING TOTAL MISSED LEADS FOR ALL SALESMEN');
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Get all salesmen
+        const [salesmen] = await pool.query(`
+            SELECT id, name, email FROM users WHERE role = 'salesman'
+        `);
+        
+        let totalMissedCount = 0;
+        
+        // Check each salesman's leads
+        for (const salesman of salesmen) {
+            // Get all leads for this salesman
+            const [leads] = await pool.query(`
+                SELECT id, sender_name, status, assigned_to, created_at
+                FROM leads 
+                WHERE assigned_to = ?
+                ORDER BY created_at DESC
+            `, [salesman.id]);
+            
+            // Check each lead individually
+            for (const lead of leads) {
+                // Skip leads that are already won or not interested
+                if (lead.status === 'Deal Won' || lead.status === 'Not Interested' || 
+                    lead.status === 'Won' || lead.status === 'WON' || lead.status === 'DEAL WON') {
+                    continue;
+                }
+                
+                // Get the latest follow-up for this lead
+                const [latestFollowup] = await pool.query(`
+                    SELECT followup_date, status
+                    FROM followups 
+                    WHERE lead_id = ? 
+                    ORDER BY followup_date DESC 
+                    LIMIT 1
+                `, [lead.id]);
+                
+                if (latestFollowup.length > 0) {
+                    const followup = latestFollowup[0];
+                    const followupDate = new Date(followup.followup_date).toISOString().split('T')[0];
+                    
+                    // Check if follow-up date is past (overdue)
+                    if (followupDate < today) {
+                        totalMissedCount++;
+                    }
+                }
+            }
+        }
+        
+        console.log('🔍 TOTAL MISSED LEADS ACROSS ALL SALESMEN:', totalMissedCount);
+        
+        res.json({
+            totalMissed: totalMissedCount
+        });
+    } catch (err) {
+        console.error('❌ ERROR GETTING TOTAL MISSED LEADS:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get KPI data for a specific salesman
+exports.getSalesmanKPI = async (req, res) => {
+    try {
+        const salesmanId = req.user.id;
+        
+        // Get ALL leads for this salesman with detailed info
+        const [allLeads] = await pool.query(`
+            SELECT id, sender_name, status, assigned_to, created_at
+            FROM leads 
+            WHERE assigned_to = ?
+            ORDER BY created_at DESC
+        `, [salesmanId]);
+        
+        // Count by status manually to be sure
+        const statusCounts = {
+            'New': 0,
+            'Assigned': 0,
+            'Follow-up': 0,
+            'Deal Won': 0,
+            'Not Interested': 0,
+            'WON': 0,
+            'Won': 0,
+            'DEAL WON': 0
+        };
+        
+        allLeads.forEach(lead => {
+            if (statusCounts.hasOwnProperty(lead.status)) {
+                statusCounts[lead.status]++;
+            }
+        });
+        
+        // Calculate total and won deals
+        const totalAssigned = allLeads.length;
+        const wonDeals = statusCounts['Deal Won'] + statusCounts['WON'] + statusCounts['Won'] + statusCounts['DEAL WON'];
+        
+        // NEW APPROACH: Check each lead's latest follow-up date
+        let missedCount = 0;
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Check each lead individually
+        for (const lead of allLeads) {
+            // Skip leads that are already won or not interested
+            if (lead.status === 'Deal Won' || lead.status === 'Not Interested' || 
+                lead.status === 'Won' || lead.status === 'WON' || lead.status === 'DEAL WON') {
+                continue;
+            }
+            
+            // Get the latest follow-up for this lead
+            const [latestFollowup] = await pool.query(`
+                SELECT followup_date, status
+                FROM followups 
+                WHERE lead_id = ? 
+                ORDER BY followup_date DESC 
+                LIMIT 1
+            `, [lead.id]);
+            
+            if (latestFollowup.length > 0) {
+                const followup = latestFollowup[0];
+                const followupDate = new Date(followup.followup_date).toISOString().split('T')[0];
+                
+                // Check if follow-up date is past (overdue)
+                if (followupDate < today) {
+                    missedCount++;
+                }
+            }
+        }
+        
+        const totalRealMissedCount = missedCount;
+        
+        // Calculate success rate
+        const successRate = totalAssigned > 0 ? ((wonDeals / totalAssigned) * 100).toFixed(1) : '0.0';
+        
+        const result = {
+            total: totalAssigned,
+            won: wonDeals,
+            missed: totalRealMissedCount,
+            successRate: parseFloat(successRate)
+        };
+        
+        res.json(result);
+    } catch (err) {
+        console.error('KPI CALCULATION ERROR:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // Get all follow-up history for admin (all salesmen)
 exports.getAllFollowupHistory = async (req, res) => {
     try {
@@ -752,6 +998,36 @@ exports.getRecentActivities = async (req, res) => {
     }
 };
 
+// Check and update missed follow-ups
+exports.checkAndUpdateMissedFollowups = async (req, res) => {
+    try {
+        const connection = await pool.getConnection();
+        
+        await connection.beginTransaction();
+        
+        // Update all pending follow-ups where due date has passed
+        const [result] = await connection.query(`
+            UPDATE followups 
+            SET status = 'Missed', 
+                completion_date = NOW(), 
+                completion_notes = 'Automatically marked as missed - due date passed',
+                updated_at = NOW()
+            WHERE status = 'Pending' 
+            AND followup_date < CURDATE()
+        `);
+        
+        await connection.commit();
+        connection.release();
+        
+        res.json({ 
+            message: 'Missed follow-ups updated successfully',
+            updatedCount: result.affectedRows 
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
 // Get all leads with follow-up status and their complete follow-up history
 exports.getAllFollowupStatusLeads = async (req, res) => {
     try {
@@ -864,6 +1140,78 @@ exports.getAllFollowupStatusLeads = async (req, res) => {
             stats: stats[0],
             summary: summary
         });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get leads for a specific salesman (admin only)
+exports.getSalesmanLeadsById = async (req, res) => {
+    const { salesmanId } = req.params;
+    try {
+        const [leads] = await pool.query(`
+            SELECT l.*, u.name as assigned_salesman, u.email as salesman_email
+            FROM leads l
+            LEFT JOIN users u ON l.assigned_to = u.id
+            WHERE l.assigned_to = ?
+            ORDER BY l.created_at DESC
+        `, [salesmanId]);
+        
+        res.json(leads);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get today's follow-ups for a specific salesman (admin only)
+exports.getTodayFollowupsById = async (req, res) => {
+    const { salesmanId } = req.params;
+    try {
+        const [followups] = await pool.query(`
+            SELECT 
+                f.*,
+                l.sender_name,
+                l.sender_email,
+                l.phone,
+                l.subject,
+                l.body,
+                u.name as salesman_name
+            FROM followups f
+            JOIN leads l ON f.lead_id = l.id
+            LEFT JOIN users u ON f.salesman_id = u.id
+            WHERE f.salesman_id = ? 
+            AND f.followup_date = CURDATE()
+            AND f.status = 'Pending'
+            ORDER BY f.followup_date ASC
+        `, [salesmanId]);
+        
+        res.json(followups);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Get follow-up history for a specific salesman (admin only)
+exports.getSalesmanFollowupHistoryById = async (req, res) => {
+    const { salesmanId } = req.params;
+    try {
+        const [followups] = await pool.query(`
+            SELECT 
+                f.*,
+                l.sender_name,
+                l.sender_email,
+                l.phone,
+                l.subject,
+                l.body,
+                u.name as salesman_name
+            FROM followups f
+            JOIN leads l ON f.lead_id = l.id
+            LEFT JOIN users u ON f.salesman_id = u.id
+            WHERE f.salesman_id = ?
+            ORDER BY f.followup_date DESC, f.created_at DESC
+        `, [salesmanId]);
+        
+        res.json(followups);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
