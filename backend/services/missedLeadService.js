@@ -12,7 +12,7 @@ class MissedLeadService {
     constructor() {
         this.followupMessage = `Sorry for the delayed response. We tried reaching you earlier.
 Please stay connected with us.
-Call us on {{phone}} or email {{email}}.`;
+Call us on +91 99887 76655 or email {{email}}.`;
     }
 
     /**
@@ -120,7 +120,6 @@ Call us on {{phone}} or email {{email}}.`;
         try {
             // Prepare personalized message
             const personalizedMessage = this.followupMessage
-                .replace('{{phone}}', lead.phone || 'our support number')
                 .replace('{{email}}', lead.salesman_email || 'support@example.com');
 
             // Send WhatsApp message
