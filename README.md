@@ -5,12 +5,8 @@ A high-performance, production-ready CRM designed for real estate and service-ba
 ## Core Features
 
 ### 1. Intelligent Lead Capture (Automation)
-- **Real-time Email Monitoring**: Automated IMAP integration with configurable fetching intervals
-- **Smart Body Extraction Engine**: Advanced regex-based extraction from email body text:
-  - **Auto-Identity**: Prioritizes `Name:`, `Customer:`, or `Client:` labels in the body.
-  - **Auto-Numbering**: Assigns `unknown client1`, `unknown client2`, etc., if no name is found in the body.
-  - **Smart Email/Phone**: Extracts `Email:`, `Mobile:`, `Contact:`, or `WA:` labels with fallback to general regex.
-- **Smart Duplicate Prevention**: Prevents exact duplicates (Email + Subject) within a 24-hour window.
+- **20-Minute Performance Window**: Optimized to scan only emails received in the last 20 minutes, preventing performance degradation in large inboxes.
+- **24-Hour Smart Deduplication**: Prevents exact duplicates (Email + Subject) from being processed within a rolling 24-hour window.
 - **Intelligent Sourcing**: Automatically identifies lead origins (MagicBricks, Housing.com, 99Acres, GitHub, Vercel, EmailJS, etc.)
 
 ### 2. WhatsApp Integration (The "Greeting" Engine)
@@ -170,6 +166,7 @@ WHATSAPP_GREETING_TEMPLATE=hello_world
 ## Key Features & Improvements
 
 ### Recent Updates
+- **20-Minute Scan Optimization**: Drastic performance improvement by only scanning the most recent emails.
 - **Smart Body Extraction Engine**: Prioritizes lead details (Name, Email, Mobile) from the email body text.
 - **Automated "Unknown" Handling**: Handles missing lead names with sequential numbering (unknown clientX).
 - **Dashboard Data Prioritization**: Dashboard now displays "True Lead" info extracted from body over email headers.

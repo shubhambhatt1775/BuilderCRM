@@ -18,8 +18,8 @@ require('dotenv').config();
  */
 const fetchAllEmailsUltimate = async () => {
     try {
-        console.log(' ULTIMATE EMAIL FETCH - No restrictions!');
-        console.log(' This will get ALL emails from your inbox');
+        console.log(' ULTIMATE EMAIL FETCH - 20 Minute Optimization');
+        console.log(' This will only process emails received in the last 20 minutes');
         
         // Get credentials from environment variables for security
         const EMAIL_USER = process.env.EMAIL_USER;
@@ -60,11 +60,17 @@ const fetchAllEmailsUltimate = async () => {
                         return;
                     }
 
-                    console.log(` Total emails in INBOX: ${box.messages.total}`);
-                    console.log(` Fetching ALL emails (no restrictions)...`);
+                    // Calculate 20 minutes ago threshold
+                    const last20Min = new Date();
+                    last20Min.setMinutes(last20Min.getMinutes() - 20);
 
-                    // Fetch all emails from inbox (no date limits)
-                    imap.search(['ALL'], async (err, results) => {
+                    console.log(` Total emails in INBOX: ${box.messages.total}`);
+                    console.log(` Fetching emails received since: ${last20Min.toLocaleString()}`);
+
+                    // Fetch emails from inbox (narrowed by date for performance)
+                    // IMAP 'SINCE' only filters by date, not time, so we narrow search here
+                    // and then filter exactly to the minute in the processing loop below.
+                    imap.search([['SINCE', last20Min]], async (err, results) => {
                         if (err) {
                             reject(err);
                             return;
@@ -97,6 +103,13 @@ const fetchAllEmailsUltimate = async () => {
                                     try {
                                         const email = Buffer.concat(buffer).toString('utf8');
                                         const parsed = await simpleParser(email);
+                                        
+                                        // Skip emails older than 20 minutes
+                                        const emailDate = parsed.date || new Date();
+                                        if (emailDate < last20Min) {
+                                            skippedCount++;
+                                            return;
+                                        }
                                         
                                         // Extract lead information from email headers
                                         const senderEmail = parsed.from?.value?.[0]?.address || '';

@@ -57,8 +57,14 @@ const fetchEmails = () => {
                 return;
             }
 
-            // Fetch all emails from inbox
-            imap.search(['ALL'], (err, results) => {
+            // Calculate 20 minutes ago
+            const last20Min = new Date();
+            last20Min.setMinutes(last20Min.getMinutes() - 20);
+
+            console.log(`Searching for emails received since: ${last20Min.toLocaleString()}`);
+
+            // Fetch emails from inbox (narrowed by date)
+            imap.search([['SINCE', last20Min]], (err, results) => {
                 if (err) {
                     console.error('Search error:', err);
                     return;
@@ -88,6 +94,14 @@ const fetchEmails = () => {
                                 const email = Buffer.concat(buffer).toString('utf8');
                                 const parsed = await simpleParser(email);
                                  
+                                // Skip emails older than 20 minutes
+                                const emailDate = parsed.date || new Date();
+                                const threshold = new Date();
+                                threshold.setMinutes(threshold.getMinutes() - 20);
+                                if (emailDate < threshold) {
+                                    return;
+                                }
+
                                 // Extract lead information
                                 const senderEmail = parsed.from?.value?.[0]?.address || '';
                                 const senderName = parsed.from?.value?.[0]?.name || senderEmail.split('@')[0];
