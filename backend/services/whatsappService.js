@@ -93,20 +93,32 @@ Thanks for reaching out. Our team will contact you shortly.`;
         // Remove all non-digit characters
         let cleanPhone = phone.replace(/\D/g, '');
 
-        // Ensure it has country code (minimum 10 digits, typical 12-15 for international)
-        if (cleanPhone.length < 10) return null;
-
-        // If no country code and starts with 0, assume it's a local number
-        // You may want to customize this based on your country
-        if (cleanPhone.length === 10 && cleanPhone.startsWith('0')) {
-            // Example: Remove leading 0 and add country code (modify as needed)
-            cleanPhone = cleanPhone.substring(1);
-            // Add your country code here (e.g., '91' for India)
-            // cleanPhone = '91' + cleanPhone;
+        // Handle Indian phone numbers
+        // If starts with 91 and has 12 digits, it's already formatted correctly
+        if (cleanPhone.startsWith('91') && cleanPhone.length === 12) {
+            return cleanPhone;
         }
 
-        // Validate final format (should contain only digits)
-        if (!/^\d+$/.test(cleanPhone)) {
+        // If it's 10 digits, add 91 country code
+        if (cleanPhone.length === 10) {
+            cleanPhone = '91' + cleanPhone;
+            return cleanPhone;
+        }
+
+        // If it's 11 digits and starts with 0, remove 0 and add 91
+        if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
+            cleanPhone = '91' + cleanPhone.substring(1);
+            return cleanPhone;
+        }
+
+        // If it has more than 12 digits, take the last 12 (in case of duplicates)
+        if (cleanPhone.length > 12) {
+            cleanPhone = cleanPhone.slice(-12);
+            return cleanPhone;
+        }
+
+        // Validate final format (should be 12 digits starting with 91)
+        if (!/^91\d{10}$/.test(cleanPhone)) {
             return null;
         }
 

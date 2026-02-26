@@ -460,16 +460,16 @@ const AdminDashboard = () => {
                                         {leads.map(lead => (
                                             <tr key={lead.id} className="hover:bg-blue-50/20 transition-all group">
                                                 <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name || 'Anonymous'}</div>
-                                                    <div className="text-gray-400 font-medium text-xs">{lead.sender_email}</div>
+                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
+                                                    <div className="text-gray-400 font-medium text-xs">{lead.customer_email || lead.sender_email}</div>
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-3 sm:py-4">
                                                     <div className="flex flex-col space-y-2">
                                                         <div className="font-bold text-gray-900 flex items-center space-x-2">
-                                                            {lead.phone ? (
-                                                                <a href={`tel:${lead.phone}`} className="hover:text-blue-600 transition-colors flex items-center space-x-2 text-sm">
+                                                            {lead.customer_phone || lead.phone ? (
+                                                                <a href={`tel:${lead.customer_phone || lead.phone}`} className="hover:text-blue-600 transition-colors flex items-center space-x-2 text-sm">
                                                                     <Phone size={12} className="text-gray-400 flex-shrink-0" />
-                                                                    <span className="truncate">{lead.phone}</span>
+                                                                    <span className="truncate">{lead.customer_phone || lead.phone}</span>
                                                                 </a>
                                                             ) : (
                                                                 <span className="text-gray-400 text-sm">No Number</span>

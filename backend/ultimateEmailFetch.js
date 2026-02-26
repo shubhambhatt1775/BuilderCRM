@@ -64,7 +64,7 @@ const fetchAllEmailsUltimate = async () => {
                     console.log(` Fetching ALL emails (no restrictions)...`);
 
                     // Fetch all emails from inbox (no date limits)
-                    imap.search(['ALL'], (err, results) => {
+                    imap.search(['ALL'], async (err, results) => {
                         if (err) {
                             reject(err);
                             return;
@@ -76,6 +76,10 @@ const fetchAllEmailsUltimate = async () => {
                             resolve({ processed: 0, skipped: 0, total: 0 });
                             return;
                         }
+
+                        // Get current number of unknown clients to start numbering
+                        const [unknownRows] = await pool.query("SELECT COUNT(*) as count FROM leads WHERE customer_name LIKE 'unknown client%'");
+                        let unknownCounter = unknownRows[0].count;
 
                         // Process emails in batches to avoid memory issues
                         const fetch = imap.fetch(results, { bodies: '', struct: true });
@@ -94,16 +98,47 @@ const fetchAllEmailsUltimate = async () => {
                                         const email = Buffer.concat(buffer).toString('utf8');
                                         const parsed = await simpleParser(email);
                                         
-                                        // Extract lead information from email
+                                        // Extract lead information from email headers
                                         const senderEmail = parsed.from?.value?.[0]?.address || '';
                                         const senderName = parsed.from?.value?.[0]?.name || senderEmail.split('@')[0];
                                         const subject = parsed.subject || '';
                                         const body = parsed.text || '';
                                         
-                                        // Extract phone number using regex patterns
-                                        const phoneRegex = /(?:\+?(\d{1,3})?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4,5})|\b\d{10,15}\b)/g;
-                                        const phoneMatch = body.match(phoneRegex) || subject.match(phoneRegex);
-                                        const phone = phoneMatch ? phoneMatch[0].replace(/\D/g, '') : '';
+                                        // NEW: Extract lead details from email text body as requested
+                                        let customerName = '';
+                                        let customerEmail = '';
+                                        let customerPhone = '';
+
+                                        // Regex patterns for Name, Email, Phone in body
+                                        const nameRegex = /(?:Name|Lead Name|Customer|Client):\s*(.*)/i;
+                                        const emailRegex = /(?:Email|Mail|ID):\s*([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/i;
+                                        const phoneRegexBody = /(?:Mobile|Phone|Contact|Number|WA):\s*([+\d\s-]{10,15})/i;
+
+                                        const nameMatch = body.match(nameRegex);
+                                        const emailMatch = body.match(emailRegex);
+                                        const phoneMatchBody = body.match(phoneRegexBody);
+
+                                        if (nameMatch) {
+                                            customerName = nameMatch[1].trim();
+                                        } else {
+                                            unknownCounter++;
+                                            customerName = `unknown client${unknownCounter}`;
+                                        }
+
+                                        if (emailMatch) {
+                                            customerEmail = emailMatch[1].trim();
+                                        } else {
+                                            customerEmail = 'no email';
+                                        }
+
+                                        if (phoneMatchBody) {
+                                            customerPhone = phoneMatchBody[1].replace(/\D/g, '').trim();
+                                        } else {
+                                            // Fallback to original general phone regex
+                                            const generalPhoneRegex = /(?:\+?(\d{1,3})?[-.\s]?\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4,5})|\b\d{10,15}\b)/g;
+                                            const generalMatch = body.match(generalPhoneRegex) || subject.match(generalPhoneRegex);
+                                            customerPhone = generalMatch ? generalMatch[0].replace(/\D/g, '') : '';
+                                        }
                                         
                                         // Detect email source (MagicBricks, GitHub, etc.)
                                         let source = 'Direct Email';
@@ -127,10 +162,10 @@ const fetchAllEmailsUltimate = async () => {
                                             );
 
                                             if (existing.length === 0) {
-                                                // Insert new lead into database with WhatsApp fields
+                                                // Insert new lead into database with WhatsApp fields and extracted customer info
                                                 const [insertResult] = await pool.query(
-                                                    'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, source, whatsapp_greeting_sent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                                                    [senderName, senderEmail, phone, subject, body, 'New', source, false]
+                                                    'INSERT INTO leads (sender_name, sender_email, phone, subject, body, status, source, whatsapp_greeting_sent, customer_name, customer_email, customer_phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                    [senderName, senderEmail, customerPhone, subject, body, 'New', source, false, customerName, customerEmail, customerPhone]
                                                 );
                                                 
                                                 const leadId = insertResult.insertId;
@@ -138,12 +173,12 @@ const fetchAllEmailsUltimate = async () => {
                                                 console.log(` [${processedCount}] [${source}] NEW: ${senderEmail} - "${subject.substring(0, 50)}..."`);
 
                                                 // Send WhatsApp greeting if phone number is available
-                                                if (phone && phone.length >= 10) {
+                                                if (customerPhone && customerPhone.length >= 10) {
                                                     try {
-                                                        console.log(`📱 Sending WhatsApp greeting for lead ${leadId} to ${phone}`);
+                                                        console.log(`📱 Sending WhatsApp greeting for lead ${leadId} to ${customerPhone}`);
                                                         
                                                         // Create greeting message from email content
-                                                        let greetingMessage = `Hello 👋\nWelcome ${senderName}!\n`;
+                                                        let greetingMessage = `Hello 👋\nWelcome ${customerName}!\n`;
                                                         
                                                         // Add subject if available
                                                         if (subject && subject.trim()) {
@@ -159,7 +194,7 @@ const fetchAllEmailsUltimate = async () => {
                                                         
                                                         greetingMessage += `Our salesman will reach you soon!!\n\nThanks for reaching out. Our team will contact you shortly.`;
                                                         
-                                                        const greetingResult = await whatsappService.sendGreeting(phone, senderName, leadId, greetingMessage);
+                                                        const greetingResult = await whatsappService.sendGreeting(customerPhone, customerName, leadId, greetingMessage);
                                                         
                                                         if (greetingResult.success) {
                                                             // Mark greeting as sent in database
@@ -174,7 +209,7 @@ const fetchAllEmailsUltimate = async () => {
                                                     }
                                                 } else {
                                                     console.log(`📵 No valid phone number for lead ${leadId}, skipping WhatsApp greeting`);
-                                                    await whatsappService.logSkippedMessage(leadId, senderName, 'No valid phone number found');
+                                                    await whatsappService.logSkippedMessage(leadId, customerName, 'No valid phone number found');
                                                 }
                                             } else {
                                                 skippedCount++;
