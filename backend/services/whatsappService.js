@@ -182,6 +182,45 @@ Thanks for reaching out. Our team will contact you shortly.`;
     async getRecentErrors(limit = 10) {
         return await whatsappLogger.getRecentErrors(limit);
     }
+
+    /**
+     * Check if missed follow-up was already sent
+     * @param {number} leadId - Lead ID to check
+     * @returns {Promise<boolean>} True if missed follow-up was already sent
+     */
+    async wasMissedFollowupSent(leadId) {
+        try {
+            const [rows] = await pool.query(
+                'SELECT missed_followup_sent FROM leads WHERE id = ? AND missed_followup_sent = TRUE',
+                [leadId]
+            );
+
+            return rows.length > 0;
+        } catch (error) {
+            console.error('Error checking missed follow-up status:', error);
+            return false; // Assume not sent on error to avoid missing follow-ups
+        }
+    }
+
+    /**
+     * Update lead record to mark missed follow-up as sent
+     * @param {number} leadId - ID of the lead
+     * @returns {Promise<boolean>} True if update successful
+     */
+    async markMissedFollowupAsSent(leadId) {
+        try {
+            await pool.query(
+                'UPDATE leads SET missed_followup_sent = TRUE, last_followup_at = NOW() WHERE id = ?',
+                [leadId]
+            );
+
+            console.log(`✅ Marked missed follow-up as sent for lead ID: ${leadId}`);
+            return true;
+        } catch (error) {
+            console.error(`❌ Failed to mark missed follow-up as sent for lead ID ${leadId}:`, error);
+            return false;
+        }
+    }
 }
 
 // Create singleton instance

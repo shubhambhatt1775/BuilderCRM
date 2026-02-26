@@ -4,6 +4,7 @@ require('dotenv').config();
 const userRoutes = require('./routes/userRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const emailCronService = require('./services/emailCronService');
+const missedLeadCronService = require('./services/missedLeadCronService');
 
 console.log('🔧 Using email credentials from .env file');
 
@@ -45,6 +46,39 @@ app.post('/api/fetch-emails', (req, res) => {
 });
 
 /**
+ * Manual missed lead processing endpoint
+ * - Triggers immediate missed lead detection and follow-up
+ * - Returns processing statistics
+ */
+app.post('/api/process-missed-leads', async (req, res) => {
+    try {
+        console.log('🔄 Manual missed lead processing requested...');
+        const results = await missedLeadCronService.runManually();
+        res.json({ 
+            message: 'Missed lead processing completed',
+            results: results
+        });
+    } catch (error) {
+        console.error('❌ Manual missed lead processing error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Get missed lead statistics endpoint
+ * - Returns current missed lead statistics
+ */
+app.get('/api/missed-leads-stats', async (req, res) => {
+    try {
+        const stats = await missedLeadCronService.getStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('❌ Error getting missed lead stats:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * Dashboard refresh endpoint
  * - Used by frontend refresh button to fetch new emails
  * - Returns detailed processing results
@@ -67,12 +101,14 @@ app.post('/api/refresh-emails', (req, res) => {
         });
 });
 
-// Start server and initialize email service
+// Start server and initialize services
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     // Start the automated email cron service
     emailCronService.start();
+    // Start the automated missed lead cron service
+    missedLeadCronService.start();
 });
 
 module.exports = app;
