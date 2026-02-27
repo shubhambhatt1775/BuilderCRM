@@ -6,18 +6,18 @@ import { UserPlus, Mail, User, Clock, CheckCircle, XCircle, TrendingUp, Target, 
 
 // Rupee Icon Component
 const RupeeIcon = ({ size = 16, className = "" }) => (
-    <svg 
-        width={size} 
-        height={size} 
-        viewBox="0 0 24 24" 
-        fill="currentColor" 
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="currentColor"
         className={className}
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
     >
-        <path d="M6 3h12v2h-4c-.6 0-1 .4-1 1v2h5v2h-5v2c0 .6.4 1 1 1h4v2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z"/>
-        <path d="M10 7h4M10 11h4"/>
+        <path d="M6 3h12v2h-4c-.6 0-1 .4-1 1v2h5v2h-5v2c0 .6.4 1 1 1h4v2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z" />
+        <path d="M10 7h4M10 11h4" />
     </svg>
 );
 
@@ -184,14 +184,14 @@ const AdminDashboard = () => {
             const res = await axios.get(`http://localhost:5000/api/leads/followup-history/lead/${leadId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             // Process follow-up history to identify missed follow-ups
             const processedHistory = res.data.followupHistory.map(followup => {
                 const followupDate = new Date(followup.followup_date);
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 followupDate.setHours(0, 0, 0, 0);
-                
+
                 // If status is Pending and due date has passed, mark as missed
                 if (followup.status === 'Pending' && followupDate < today) {
                     return {
@@ -203,7 +203,7 @@ const AdminDashboard = () => {
                 }
                 return followup;
             });
-            
+
             setSelectedLeadHistory({
                 ...res.data,
                 followupHistory: processedHistory
@@ -282,7 +282,7 @@ const AdminDashboard = () => {
             setTotalMissedLeads(0);
             return;
         }
-        
+
         try {
             const res = await axios.get(`http://localhost:5000/api/leads/kpi/${selectedSalesman}`, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -299,9 +299,9 @@ const AdminDashboard = () => {
             const res = await axios.get('http://localhost:5000/api/users/salesmen', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             const missedLeadsData = {};
-            
+
             // Fetch missed leads for each salesman
             for (const salesman of res.data) {
                 try {
@@ -314,7 +314,7 @@ const AdminDashboard = () => {
                     missedLeadsData[salesman.id] = 0;
                 }
             }
-            
+
             setSalesmenMissedLeads(missedLeadsData);
         } catch (err) {
             console.error('Error fetching salesmen:', err);
@@ -357,14 +357,14 @@ const AdminDashboard = () => {
                             <span>Onboard Salesman</span>
                         </button>
                         <button
-                            onClick={async () => { 
+                            onClick={async () => {
                                 try {
                                     const res = await axios.post('http://localhost:5000/api/refresh-emails', {}, {
                                         headers: { Authorization: `Bearer ${token}` }
                                     });
                                     alert(`Email refresh completed! Processed: ${res.data.processed}, Skipped: ${res.data.skipped}`);
-                                    fetchLeads(); 
-                                    fetchReports(); 
+                                    fetchLeads();
+                                    fetchReports();
                                 } catch (error) {
                                     console.error('Refresh error:', error);
                                     alert('Failed to refresh emails. Please try again.');
@@ -386,7 +386,7 @@ const AdminDashboard = () => {
                         const inPipeline = leads.filter(l => l.status === 'Assigned' || l.status === 'Follow-up').length || 0;
                         const missedLeads = getTotalMissedLeads(); // Use calculated total from all salesmen
                         const revenue = reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue || 0), 0).toLocaleString() || 0;
-                        
+
                         const stats = [
                             { label: 'Total Leads', value: totalLeads, icon: <Mail />, color: 'blue' },
                             { label: 'Deals Won', value: dealsWon, icon: <TrendingUp />, color: 'emerald' },
@@ -394,7 +394,7 @@ const AdminDashboard = () => {
                             { label: 'Missed Leads', value: missedLeads, icon: <XCircle />, color: 'red' },
                             { label: 'Revenue Generated', value: `₹${revenue}`, icon: <RupeeIcon />, color: 'indigo' }
                         ];
-                        
+
                         return stats.map((stat, i) => (
                             <div key={i} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-3 sm:space-x-4 hover:shadow-md transition-all">
                                 <div className={`p-3 sm:p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl sm:rounded-2xl flex-shrink-0`}>
@@ -488,9 +488,9 @@ const AdminDashboard = () => {
                                                         )}
                                                         <div className="mt-1">
                                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                    lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                                        lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                                            'bg-gray-50 text-gray-400 border border-gray-100'
+                                                                lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                                    lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                        'bg-gray-50 text-gray-400 border border-gray-100'
                                                                 }`}>
                                                                 WA: {lead.whatsapp_status}
                                                             </span>
@@ -506,8 +506,8 @@ const AdminDashboard = () => {
                                                         <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
                                                     </div>
                                                     <div className="flex items-center space-x-2 mt-1">
-                                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide bg-gray-50 text-gray-500 border border-gray-100`}>
-                                                            {lead.source || 'Direct'}
+                                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wide bg-blue-50 text-blue-600 border border-blue-100`}>
+                                                            {`Direct Email From ${lead.sender_email}`}
                                                         </span>
                                                     </div>
                                                 </td>
@@ -525,13 +525,12 @@ const AdminDashboard = () => {
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-3 sm:py-4">
                                                     <div className="space-y-2">
-                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${
-                                                            lead.status === 'Follow-up' && hasMissedFollowup(lead) ? 
-                                                                'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
+                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Follow-up' && hasMissedFollowup(lead) ?
+                                                            'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
                                                             lead.status === 'New' ? 'bg-blue-50 text-blue-700 ring-blue-700/10' :
-                                                            lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
-                                                                lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
-                                                                    'bg-gray-50 text-gray-600 ring-gray-600/10'
+                                                                lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
+                                                                    lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                                        'bg-gray-50 text-gray-600 ring-gray-600/10'
                                                             }`}>
                                                             {lead.status}
                                                         </span>
@@ -541,11 +540,10 @@ const AdminDashboard = () => {
                                                             </div>
                                                         )}
                                                         {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
-                                                            <div className={`text-xs font-medium px-2 py-1 rounded border ${
-                                                                hasMissedFollowup(lead) ? 
-                                                                    'text-red-700 bg-red-100 border-red-300 font-bold' : 
-                                                                    'text-amber-700 bg-amber-50 border-amber-200'
-                                                            }`}>
+                                                            <div className={`text-xs font-medium px-2 py-1 rounded border ${hasMissedFollowup(lead) ?
+                                                                'text-red-700 bg-red-100 border-red-300 font-bold' :
+                                                                'text-amber-700 bg-amber-50 border-amber-200'
+                                                                }`}>
                                                                 📅 {getNextFollowupDate(lead)}
                                                                 {hasMissedFollowup(lead) && ' (Overdue)'}
                                                             </div>
@@ -624,7 +622,7 @@ const AdminDashboard = () => {
                                         <span className="text-xs font-black text-emerald-700 uppercase tracking-widest">Today</span>
                                     </div>
                                     <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-1">
-                                        {followupStatusLeads.filter(lead => 
+                                        {followupStatusLeads.filter(lead =>
                                             lead.followupHistory.some(f => f.urgency_status === 'today')
                                         ).length}
                                     </h3>
@@ -656,126 +654,125 @@ const AdminDashboard = () => {
                                             {followupStatusLeads.map(lead => {
                                                 const hasTodayFollowup = lead.followupHistory.some(f => f.urgency_status === 'today');
                                                 return (
-                                                <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
-                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                        <div className="flex items-start space-x-2">
-                                                            <div className="flex-1">
-                                                                <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name}</div>
-                                                                <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
-                                                                {lead.phone && (
-                                                                    <div className="text-xs text-gray-500 mt-1">{lead.phone}</div>
+                                                    <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
+                                                        <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                            <div className="flex items-start space-x-2">
+                                                                <div className="flex-1">
+                                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name}</div>
+                                                                    <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
+                                                                    {lead.phone && (
+                                                                        <div className="text-xs text-gray-500 mt-1">{lead.phone}</div>
+                                                                    )}
+                                                                    <div className="text-xs text-gray-400 mt-1">
+                                                                        Created: {new Date(lead.lead_created).toLocaleDateString()}
+                                                                    </div>
+                                                                </div>
+                                                                {hasTodayFollowup && (
+                                                                    <div className="flex-shrink-0">
+                                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
+                                                                            TODAY
+                                                                        </span>
+                                                                    </div>
                                                                 )}
-                                                                <div className="text-xs text-gray-400 mt-1">
-                                                                    Created: {new Date(lead.lead_created).toLocaleDateString()}
-                                                                </div>
                                                             </div>
-                                                            {hasTodayFollowup && (
-                                                                <div className="flex-shrink-0">
-                                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
-                                                                        TODAY
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                        {lead.assigned_salesman ? (
-                                                            <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
-                                                                <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
-                                                                    {lead.assigned_salesman[0]}
-                                                                </div>
-                                                                <span className="text-xs font-bold text-gray-700 truncate max-w-[80px] sm:max-w-none">{lead.assigned_salesman}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-1 rounded border border-amber-100 uppercase">Unassigned</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center space-x-2">
-                                                                <span className="text-xs font-medium text-gray-500">Total:</span>
-                                                                <span className="text-xs font-bold text-gray-900">{lead.total_followups}</span>
-                                                            </div>
-                                                            <div className="flex items-center space-x-2">
-                                                                <span className="text-xs font-medium text-emerald-600">Completed:</span>
-                                                                <span className="text-xs font-bold text-emerald-600">{lead.completed_followups}</span>
-                                                            </div>
-                                                            <div className="flex items-center space-x-2">
-                                                                <span className="text-xs font-medium text-amber-600">Pending:</span>
-                                                                <span className="text-xs font-bold text-amber-600">{lead.pending_followups}</span>
-                                                            </div>
-                                                            {lead.missed_followups > 0 && (
-                                                                <div className="flex items-center space-x-2">
-                                                                    <span className="text-xs font-medium text-red-600">Missed:</span>
-                                                                    <span className="text-xs font-bold text-red-600">{lead.missed_followups}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="text-xs">
-                                                            {lead.upcoming_followup ? (
-                                                                <div>
-                                                                    <div className="font-bold text-gray-900">
-                                                                        {new Date(lead.upcoming_followup).toLocaleDateString()}
+                                                        </td>
+                                                        <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                            {lead.assigned_salesman ? (
+                                                                <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
+                                                                    <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
+                                                                        {lead.assigned_salesman[0]}
                                                                     </div>
-                                                                    <div className="text-gray-500">
-                                                                        {new Date(lead.upcoming_followup).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                                                    </div>
+                                                                    <span className="text-xs font-bold text-gray-700 truncate max-w-[80px] sm:max-w-none">{lead.assigned_salesman}</span>
                                                                 </div>
                                                             ) : (
-                                                                <span className="text-gray-400">No scheduled follow-up</span>
+                                                                <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-1 rounded border border-amber-100 uppercase">Unassigned</span>
                                                             )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="space-y-1">
-                                                            {lead.followupHistory.slice(0, 2).map((followup, index) => (
-                                                                <div key={index} className="flex items-center space-x-2">
-                                                                    <span className={`w-2 h-2 rounded-full ${
-                                                                        followup.urgency_status === 'overdue' ? 'bg-red-500' :
-                                                                        followup.urgency_status === 'today' ? 'bg-emerald-500' :
-                                                                        followup.urgency_status === 'upcoming' ? 'bg-blue-500' :
-                                                                        followup.status === 'Completed' ? 'bg-gray-400' :
-                                                                        'bg-amber-500'
-                                                                    }`}></span>
-                                                                    <span className="text-xs text-gray-600">{followup.status}</span>
-                                                                    <span className="text-xs text-gray-400">
-                                                                        {new Date(followup.followup_date).toLocaleDateString()}
-                                                                    </span>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="text-xs font-medium text-gray-500">Total:</span>
+                                                                    <span className="text-xs font-bold text-gray-900">{lead.total_followups}</span>
                                                                 </div>
-                                                            ))}
-                                                            {lead.followupHistory.length > 2 && (
-                                                                <div className="text-xs text-gray-400">
-                                                                    +{lead.followupHistory.length - 2} more
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="text-xs font-medium text-emerald-600">Completed:</span>
+                                                                    <span className="text-xs font-bold text-emerald-600">{lead.completed_followups}</span>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex justify-center space-x-2">
-                                                            <button
-                                                                onClick={() => {/* View details logic */}}
-                                                                className="text-blue-600 hover:text-blue-800 transition-colors"
-                                                                title="View complete follow-up history"
-                                                            >
-                                                                <ExternalLink size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => fetchLeadFollowupHistory(lead.id)}
-                                                                className="text-amber-600 hover:text-amber-800 transition-colors"
-                                                                title="View follow-up history"
-                                                            >
-                                                                <Clock size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
+                                                                <div className="flex items-center space-x-2">
+                                                                    <span className="text-xs font-medium text-amber-600">Pending:</span>
+                                                                    <span className="text-xs font-bold text-amber-600">{lead.pending_followups}</span>
+                                                                </div>
+                                                                {lead.missed_followups > 0 && (
+                                                                    <div className="flex items-center space-x-2">
+                                                                        <span className="text-xs font-medium text-red-600">Missed:</span>
+                                                                        <span className="text-xs font-bold text-red-600">{lead.missed_followups}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="text-xs">
+                                                                {lead.upcoming_followup ? (
+                                                                    <div>
+                                                                        <div className="font-bold text-gray-900">
+                                                                            {new Date(lead.upcoming_followup).toLocaleDateString()}
+                                                                        </div>
+                                                                        <div className="text-gray-500">
+                                                                            {new Date(lead.upcoming_followup).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-gray-400">No scheduled follow-up</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="space-y-1">
+                                                                {lead.followupHistory.slice(0, 2).map((followup, index) => (
+                                                                    <div key={index} className="flex items-center space-x-2">
+                                                                        <span className={`w-2 h-2 rounded-full ${followup.urgency_status === 'overdue' ? 'bg-red-500' :
+                                                                            followup.urgency_status === 'today' ? 'bg-emerald-500' :
+                                                                                followup.urgency_status === 'upcoming' ? 'bg-blue-500' :
+                                                                                    followup.status === 'Completed' ? 'bg-gray-400' :
+                                                                                        'bg-amber-500'
+                                                                            }`}></span>
+                                                                        <span className="text-xs text-gray-600">{followup.status}</span>
+                                                                        <span className="text-xs text-gray-400">
+                                                                            {new Date(followup.followup_date).toLocaleDateString()}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                                {lead.followupHistory.length > 2 && (
+                                                                    <div className="text-xs text-gray-400">
+                                                                        +{lead.followupHistory.length - 2} more
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex justify-center space-x-2">
+                                                                <button
+                                                                    onClick={() => {/* View details logic */ }}
+                                                                    className="text-blue-600 hover:text-blue-800 transition-colors"
+                                                                    title="View complete follow-up history"
+                                                                >
+                                                                    <ExternalLink size={16} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => fetchLeadFollowupHistory(lead.id)}
+                                                                    className="text-amber-600 hover:text-amber-800 transition-colors"
+                                                                    title="View follow-up history"
+                                                                >
+                                                                    <Clock size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
                                                 );
                                             })}
                                         </tbody>
                                     </table>
-                                    
+
                                     {followupStatusLeads.length === 0 && (
                                         <div className="text-center py-12">
                                             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -830,8 +827,8 @@ const AdminDashboard = () => {
                                         <span className="text-xs font-black text-amber-700 uppercase tracking-widest">Conversion</span>
                                     </div>
                                     <h3 className="text-2xl font-black text-gray-900 mb-1">
-                                        {reports?.salesmanPerf?.length > 0 ? 
-                                            (reports.salesmanPerf.reduce((acc, s) => acc + (parseInt(s.total_assigned) > 0 ? (parseInt(s.deals_won) / parseInt(s.total_assigned)) * 100 : 0), 0) / reports.salesmanPerf.length).toFixed(1) 
+                                        {reports?.salesmanPerf?.length > 0 ?
+                                            (reports.salesmanPerf.reduce((acc, s) => acc + (parseInt(s.total_assigned) > 0 ? (parseInt(s.deals_won) / parseInt(s.total_assigned)) * 100 : 0), 0) / reports.salesmanPerf.length).toFixed(1)
                                             : 0}%
                                     </h3>
                                     <p className="text-sm text-amber-700 font-medium">Average Success Rate</p>
@@ -1049,7 +1046,7 @@ const AdminDashboard = () => {
                                     {selectedLeadHistory.leadDetails?.sender_name} - {selectedLeadHistory.leadDetails?.sender_email}
                                 </p>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setShowFollowupHistoryModal(false)}
                                 className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition flex-shrink-0"
                             >
@@ -1078,49 +1075,46 @@ const AdminDashboard = () => {
                         {/* Follow-up Timeline */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-black text-gray-900">Follow-up Timeline</h3>
-                            
+
                             {selectedLeadHistory.followupHistory && selectedLeadHistory.followupHistory.length > 0 ? (
                                 <div className="relative">
                                     <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-100"></div>
-                                    
+
                                     <div className="space-y-6">
                                         {selectedLeadHistory.followupHistory
                                             .sort((a, b) => new Date(b.followup_date) - new Date(a.followup_date))
                                             .map((followup, index) => (
                                                 <div key={followup.id} className="relative flex items-start space-x-4">
                                                     <div className="relative z-10 w-16 h-16 bg-white rounded-full flex items-center justify-center border-4 border-white shadow-sm">
-                                                        <div className={`p-3 rounded-full ${
-                                                            followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                                                        <div className={`p-3 rounded-full ${followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
                                                             followup.status === 'Pending' ? 'bg-amber-100 text-amber-600 border-amber-200' :
-                                                            followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
-                                                            'bg-gray-100 text-gray-600 border-gray-200'
-                                                        }`}>
+                                                                followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
+                                                                    'bg-gray-100 text-gray-600 border-gray-200'
+                                                            }`}>
                                                             {followup.status === 'Completed' ? <CheckCircle size={20} /> :
-                                                             followup.status === 'Pending' ? <Clock size={20} /> :
-                                                             followup.status === 'Missed' ? <XCircle size={20} /> :
-                                                             <Target size={20} />}
+                                                                followup.status === 'Pending' ? <Clock size={20} /> :
+                                                                    followup.status === 'Missed' ? <XCircle size={20} /> :
+                                                                        <Target size={20} />}
                                                         </div>
                                                     </div>
-                                                    <div className={`flex-1 rounded-2xl p-4 border ${
-                                                        followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
+                                                    <div className={`flex-1 rounded-2xl p-4 border ${followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
                                                         followup.status === 'Pending' ? 'bg-amber-50 border-amber-100' :
-                                                        followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
-                                                        'bg-gray-50 border-gray-100'
-                                                    }`}>
+                                                            followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
+                                                                'bg-gray-50 border-gray-100'
+                                                        }`}>
                                                         <div className="flex items-center justify-between mb-2">
-                                                            <span className={`text-xs font-black uppercase tracking-widest ${
-                                                                followup.status === 'Completed' ? 'text-emerald-600' :
+                                                            <span className={`text-xs font-black uppercase tracking-widest ${followup.status === 'Completed' ? 'text-emerald-600' :
                                                                 followup.status === 'Pending' ? 'text-amber-600' :
-                                                                followup.status === 'Missed' ? 'text-red-600' :
-                                                                'text-gray-600'
-                                                            }`}>
+                                                                    followup.status === 'Missed' ? 'text-red-600' :
+                                                                        'text-gray-600'
+                                                                }`}>
                                                                 {followup.status}
                                                             </span>
                                                             <span className="text-xs text-gray-400">
                                                                 {new Date(followup.followup_date).toLocaleDateString()}
                                                             </span>
                                                         </div>
-                                                        
+
                                                         <div className="mb-2">
                                                             <span className="text-xs font-medium text-gray-500">Salesman:</span>
                                                             <span className="text-xs text-gray-700 ml-2">{followup.salesman_name}</span>

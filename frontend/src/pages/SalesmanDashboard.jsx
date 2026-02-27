@@ -5,18 +5,18 @@ import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, Messa
 
 // Rupee Icon Component
 const RupeeIcon = ({ size = 16, className = "" }) => (
-    <svg 
-        width={size} 
-        height={size} 
-        viewBox="0 0 24 24" 
-        fill="currentColor" 
+    <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="currentColor"
         className={className}
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
     >
-        <path d="M6 3h12v2h-4c-.6 0-1 .4-1 1v2h5v2h-5v2c0 .6.4 1 1 1h4v2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z"/>
-        <path d="M10 7h4M10 11h4"/>
+        <path d="M6 3h12v2h-4c-.6 0-1 .4-1 1v2h5v2h-5v2c0 .6.4 1 1 1h4v2H6c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2z" />
+        <path d="M10 7h4M10 11h4" />
     </svg>
 );
 
@@ -49,14 +49,14 @@ const SalesmanDashboard = () => {
             const res = await axios.get('http://localhost:5000/api/leads/kpi', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             const newKpiData = {
                 total: parseInt(res.data.total) || 0,
                 won: parseInt(res.data.won) || 0,
                 missed: parseInt(res.data.missed) || 0,
                 successRate: parseFloat(res.data.successRate) || 0.0
             };
-            
+
             setKpiData(newKpiData);
         } catch (error) {
             console.error('Error fetching KPI data:', error);
@@ -122,14 +122,14 @@ const SalesmanDashboard = () => {
         try {
             const today = new Date().toISOString().split('T')[0];
             console.log('Today:', today);
-            
+
             // Get all follow-ups for this salesman
             const res = await axios.get(`http://localhost:5000/api/leads/followup-history/my-followups`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             console.log('All followups fetched:', res.data);
-            
+
             // Filter for overdue follow-ups (due date before today and still pending)
             const overdue = res.data.filter(f => {
                 const followupDate = new Date(f.followup_date).toISOString().split('T')[0];
@@ -137,7 +137,7 @@ const SalesmanDashboard = () => {
                 console.log(`Followup ${f.id}: ${followupDate} vs ${today}, status: ${f.status} = ${isOverdue}`);
                 return isOverdue;
             });
-            
+
             console.log('Overdue followups:', overdue);
             setOverdueFollowups(overdue);
         } catch (error) {
@@ -172,14 +172,14 @@ const SalesmanDashboard = () => {
             const res = await axios.get(`http://localhost:5000/api/leads/followup-history/lead/${leadId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            
+
             // Process follow-up history to identify missed follow-ups
             const processedHistory = res.data.followupHistory.map(followup => {
                 const followupDate = new Date(followup.followup_date);
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 followupDate.setHours(0, 0, 0, 0);
-                
+
                 // If status is Pending and due date has passed, mark as missed
                 if (followup.status === 'Pending' && followupDate < today) {
                     return {
@@ -191,7 +191,7 @@ const SalesmanDashboard = () => {
                 }
                 return followup;
             });
-            
+
             setSelectedLeadHistory({
                 ...res.data,
                 followupHistory: processedHistory
@@ -325,133 +325,135 @@ const SalesmanDashboard = () => {
                                 const hasMissedFollowupLocal = overdueFollowups.some(f => f.lead_id === lead.id);
                                 console.log(`Lead ${lead.id}: hasMissedFollowupLocal = ${hasMissedFollowupLocal}, overdueFollowups = ${overdueFollowups.length}`);
                                 return (
-                                <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${
-                                    hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : 
-                                    hasMissedFollowupLocal ? 'bg-red-50/50 border-l-4 border-red-500' :
-                                    (lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) ? 'bg-red-100 border-l-4 border-red-500' : ''
-                                }`}>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-600 font-black text-lg">
-                                                    {lead.sender_name?.[0] || 'A'}
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <div className="font-extrabold text-gray-900 text-sm">{lead.sender_name || 'Anonymous User'}</div>
-                                                        {hasMissedFollowupLocal && (
-                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-red-100 text-red-800 border border-red-200 animate-pulse">
-                                                                MISSED
-                                                            </span>
-                                                        )}
+                                    <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' :
+                                        hasMissedFollowupLocal ? 'bg-red-50/50 border-l-4 border-red-500' :
+                                            (lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) ? 'bg-red-100 border-l-4 border-red-500' : ''
+                                        }`}>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-600 font-black text-lg">
+                                                        {(lead.customer_name || lead.sender_name)?.[0] || 'A'}
                                                     </div>
-                                                    <div className="text-xs text-gray-400">{lead.sender_email}</div>
+                                                    <div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <div className="font-extrabold text-gray-900 text-sm">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
+                                                            {hasMissedFollowupLocal && (
+                                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-red-100 text-red-800 border border-red-200 animate-pulse">
+                                                                    MISSED
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-gray-400">{lead.customer_email && lead.customer_email !== 'no email' ? lead.customer_email : lead.sender_email}</div>
+                                                    </div>
                                                 </div>
+                                                {hasTodayFollowup && (
+                                                    <div className="flex-shrink-0">
+                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
+                                                            TODAY
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {hasTodayFollowup && (
-                                                <div className="flex-shrink-0">
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
-                                                        TODAY
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center space-x-2">
-                                            {lead.phone ? (
-                                                <a href={`tel:${lead.phone}`} className="font-black text-gray-900 text-sm hover:text-blue-600 transition-colors flex items-center space-x-1.5">
-                                                    <Phone size={12} className="text-gray-400" />
-                                                    <span>{lead.phone}</span>
-                                                </a>
-                                            ) : (
-                                                <span className="text-gray-400 font-bold text-sm italic">Not Provided</span>
-                                            )}
-                                            {lead.phone && (
-                                                <a
-                                                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-emerald-500 hover:text-emerald-600 transition-colors"
-                                                >
-                                                    <MessageSquare size={14} />
-                                                </a>
-                                            )}
-                                        </div>
-                                        <div className="mt-1">
-                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center space-x-2">
+                                                {lead.customer_phone || lead.phone ? (
+                                                    <a href={`tel:${lead.customer_phone || lead.phone}`} className="font-black text-gray-900 text-sm hover:text-blue-600 transition-colors flex items-center space-x-1.5">
+                                                        <Phone size={12} className="text-gray-400" />
+                                                        <span>{lead.customer_phone || lead.phone}</span>
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-gray-400 font-bold text-sm italic">Not Provided</span>
+                                                )}
+                                                {lead.phone && (
+                                                    <a
+                                                        href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-emerald-500 hover:text-emerald-600 transition-colors"
+                                                    >
+                                                        <MessageSquare size={14} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="mt-1">
+                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
                                                     lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
                                                         lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                                                             'bg-gray-50 text-gray-400 border border-gray-100'
-                                                }`}>
-                                                WA: {lead.whatsapp_status}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 max-w-xs">
-                                        <div
-                                            onClick={() => setViewMessage(lead)}
-                                            className="cursor-pointer hover:bg-gray-100 p-2 rounded-xl transition-all border border-transparent hover:border-blue-100 group/msg"
-                                        >
-                                            <div className="font-bold text-[10px] text-gray-400 mb-0.5 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
-                                            <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
-                                            {(lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) && (
-                                                <div className="mt-2 text-xs font-bold text-red-700 bg-red-50 px-2 py-1 rounded border border-red-200 animate-pulse">
-                                                    MISSED LEAD
+                                                    }`}>
+                                                    WA: {lead.whatsapp_status}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 max-w-xs">
+                                            <div
+                                                onClick={() => setViewMessage(lead)}
+                                                className="cursor-pointer hover:bg-gray-100 p-2 rounded-xl transition-all border border-transparent hover:border-blue-100 group/msg"
+                                            >
+                                                <div className="font-bold text-[10px] text-gray-400 mb-0.5 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
+                                                <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
+                                                <div className="flex items-center space-x-2 mt-2">
+                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wide bg-blue-50 text-blue-600 border border-blue-100`}>
+                                                        Direct Email From {lead.sender_email}
+                                                    </span>
+                                                    {(lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) && (
+                                                        <div className="text-[9px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200 animate-pulse">
+                                                            MISSED LEAD
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="space-y-2">
-                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${
-                                                lead.status === 'Follow-up' && hasMissedFollowup(lead) ? 
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="space-y-2">
+                                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Follow-up' && hasMissedFollowup(lead) ?
                                                     'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
-                                                lead.status === 'Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
-                                                lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
-                                                    'bg-blue-50 text-blue-700 ring-blue-700/10'
-                                            }`}>
-                                                {lead.status}
-                                            </span>
-                                            {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
-                                                <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
-                                                    MISSED
-                                                </div>
-                                            )}
-                                            {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
-                                                <div className={`text-xs font-medium px-2 py-1 rounded border ${
-                                                    hasMissedFollowup(lead) ? 
-                                                        'text-red-700 bg-red-100 border-red-300 font-bold' : 
+                                                    lead.status === 'Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                        lead.status === 'Follow-up' ? 'bg-amber-50 text-amber-700 ring-amber-700/10' :
+                                                            'bg-blue-50 text-blue-700 ring-blue-700/10'
+                                                    }`}>
+                                                    {lead.status}
+                                                </span>
+                                                {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
+                                                    <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                                        MISSED
+                                                    </div>
+                                                )}
+                                                {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
+                                                    <div className={`text-xs font-medium px-2 py-1 rounded border ${hasMissedFollowup(lead) ?
+                                                        'text-red-700 bg-red-100 border-red-300 font-bold' :
                                                         'text-amber-700 bg-amber-50 border-amber-200'
-                                                }`}>
-                                                    📅 {getNextFollowupDate(lead)}
-                                                    {hasMissedFollowup(lead) && ' (Overdue)'}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex justify-center space-x-2">
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedLead(lead);
-                                                    setStatusUpdate({ ...statusUpdate, status: lead.status });
-                                                }}
-                                                className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
-                                            >
-                                                <ExternalLink size={12} />
-                                                <span>Update</span>
-                                            </button>
-                                            <button
-                                                onClick={() => fetchLeadFollowupHistory(lead.id)}
-                                                className="text-amber-600 hover:text-amber-800 transition-colors"
-                                                title="View follow-up history"
-                                            >
-                                                <Clock size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                                        }`}>
+                                                        📅 {getNextFollowupDate(lead)}
+                                                        {hasMissedFollowup(lead) && ' (Overdue)'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex justify-center space-x-2">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedLead(lead);
+                                                        setStatusUpdate({ ...statusUpdate, status: lead.status });
+                                                    }}
+                                                    className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
+                                                >
+                                                    <ExternalLink size={12} />
+                                                    <span>Update</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => fetchLeadFollowupHistory(lead.id)}
+                                                    className="text-amber-600 hover:text-amber-800 transition-colors"
+                                                    title="View follow-up history"
+                                                >
+                                                    <Clock size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
                                 );
                             })}
                         </tbody>
@@ -466,7 +468,7 @@ const SalesmanDashboard = () => {
                         <div className="flex justify-between items-start mb-8">
                             <div>
                                 <h2 className="text-3xl font-black text-gray-900 mb-2">Lead Handler</h2>
-                                <p className="text-gray-500 font-medium">Customer: <span className="text-gray-900 font-bold">{selectedLead.sender_name}</span></p>
+                                <p className="text-gray-500 font-medium">Customer: <span className="text-gray-900 font-bold">{selectedLead.customer_name || selectedLead.sender_name || 'Anonymous'}</span></p>
                             </div>
                             <button onClick={() => setSelectedLead(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-3 rounded-2xl transition hover:rotate-90">
                                 <XCircle size={28} />
@@ -607,8 +609,8 @@ const SalesmanDashboard = () => {
                                     {todayFollowups.map(f => (
                                         <tr key={f.id} className="bg-gray-50/50 hover:bg-red-50/30 transition-all rounded-3xl overflow-hidden group">
                                             <td className="px-6 py-5 rounded-l-[24px]">
-                                                <div className="font-extrabold text-gray-900 text-lg">{f.sender_name}</div>
-                                                <div className="text-gray-400 text-sm font-medium">{f.sender_email}</div>
+                                                <div className="font-extrabold text-gray-900 text-lg">{f.customer_name || f.sender_name || 'Anonymous'}</div>
+                                                <div className="text-gray-400 text-sm font-medium">{f.customer_email && f.customer_email !== 'no email' ? f.customer_email : f.sender_email}</div>
                                             </td>
                                             <td className="px-6 py-5">
                                                 <div className="text-xs font-bold text-red-600 bg-red-100 flex items-center space-x-1.5 px-3 py-1 rounded-full w-fit mb-2">
@@ -667,7 +669,7 @@ const SalesmanDashboard = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-black text-gray-900 leading-tight">Client Requirement</h3>
-                                    <p className="text-gray-500 font-medium text-sm">From: <span className="text-blue-600 font-bold">{viewMessage.sender_name}</span></p>
+                                    <p className="text-gray-500 font-medium text-sm">From: <span className="text-blue-600 font-bold">{viewMessage.customer_name || viewMessage.sender_name || 'Anonymous'}</span></p>
                                 </div>
                             </div>
                             <button onClick={() => setViewMessage(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-3 rounded-2xl transition hover:rotate-90">
@@ -719,10 +721,10 @@ const SalesmanDashboard = () => {
                             <div>
                                 <h2 className="text-3xl font-black text-gray-900 italic">Follow-up History</h2>
                                 <p className="text-gray-400 text-sm font-medium mt-1">
-                                    {selectedLeadHistory.leadDetails?.sender_name} - {selectedLeadHistory.leadDetails?.sender_email}
+                                    {selectedLeadHistory.leadDetails?.customer_name || selectedLeadHistory.leadDetails?.sender_name || 'Anonymous'} - {selectedLeadHistory.leadDetails?.customer_email && selectedLeadHistory.leadDetails?.customer_email !== 'no email' ? selectedLeadHistory.leadDetails?.customer_email : selectedLeadHistory.leadDetails?.sender_email}
                                 </p>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setShowFollowupHistoryModal(false)}
                                 className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition"
                             >
@@ -751,49 +753,46 @@ const SalesmanDashboard = () => {
                         {/* Follow-up Timeline */}
                         <div className="space-y-4">
                             <h3 className="text-lg font-black text-gray-900">Follow-up Timeline</h3>
-                            
+
                             {selectedLeadHistory.followupHistory && selectedLeadHistory.followupHistory.length > 0 ? (
                                 <div className="relative">
                                     <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-100"></div>
-                                    
+
                                     <div className="space-y-6">
                                         {selectedLeadHistory.followupHistory
                                             .sort((a, b) => new Date(b.followup_date) - new Date(a.followup_date))
                                             .map((followup, index) => (
                                                 <div key={followup.id} className="relative flex items-start space-x-4">
                                                     <div className="relative z-10 w-16 h-16 bg-white rounded-full flex items-center justify-center border-4 border-white shadow-sm">
-                                                        <div className={`p-3 rounded-full ${
-                                                            followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                                                        <div className={`p-3 rounded-full ${followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
                                                             followup.status === 'Pending' ? 'bg-amber-100 text-amber-600 border-amber-200' :
-                                                            followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
-                                                            'bg-gray-100 text-gray-600 border-gray-200'
-                                                        }`}>
+                                                                followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
+                                                                    'bg-gray-100 text-gray-600 border-gray-200'
+                                                            }`}>
                                                             {followup.status === 'Completed' ? <CheckCircle size={20} /> :
-                                                             followup.status === 'Pending' ? <Clock size={20} /> :
-                                                             followup.status === 'Missed' ? <XCircle size={20} /> :
-                                                             <Target size={20} />}
+                                                                followup.status === 'Pending' ? <Clock size={20} /> :
+                                                                    followup.status === 'Missed' ? <XCircle size={20} /> :
+                                                                        <Target size={20} />}
                                                         </div>
                                                     </div>
-                                                    <div className={`flex-1 rounded-2xl p-4 border ${
-                                                        followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
+                                                    <div className={`flex-1 rounded-2xl p-4 border ${followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
                                                         followup.status === 'Pending' ? 'bg-amber-50 border-amber-100' :
-                                                        followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
-                                                        'bg-gray-50 border-gray-100'
-                                                    }`}>
+                                                            followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
+                                                                'bg-gray-50 border-gray-100'
+                                                        }`}>
                                                         <div className="flex items-center justify-between mb-2">
-                                                            <span className={`text-xs font-black uppercase tracking-widest ${
-                                                                followup.status === 'Completed' ? 'text-emerald-600' :
+                                                            <span className={`text-xs font-black uppercase tracking-widest ${followup.status === 'Completed' ? 'text-emerald-600' :
                                                                 followup.status === 'Pending' ? 'text-amber-600' :
-                                                                followup.status === 'Missed' ? 'text-red-600' :
-                                                                'text-gray-600'
-                                                            }`}>
+                                                                    followup.status === 'Missed' ? 'text-red-600' :
+                                                                        'text-gray-600'
+                                                                }`}>
                                                                 {followup.status}
                                                             </span>
                                                             <span className="text-xs text-gray-400">
                                                                 {new Date(followup.followup_date).toLocaleDateString()}
                                                             </span>
                                                         </div>
-                                                        
+
                                                         <div className="mb-2">
                                                             <span className="text-xs font-medium text-gray-500">Salesman:</span>
                                                             <span className="text-xs text-gray-700 ml-2">{followup.salesman_name}</span>
