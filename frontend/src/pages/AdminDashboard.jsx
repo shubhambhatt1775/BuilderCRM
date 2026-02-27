@@ -40,6 +40,33 @@ const AdminDashboard = () => {
     const [showFollowupHistoryModal, setShowFollowupHistoryModal] = useState(false);
     const [selectedLeadHistory, setSelectedLeadHistory] = useState(null);
     const [viewMessage, setViewMessage] = useState(null);
+    const [editingWonLead, setEditingWonLead] = useState(null);
+    const [wonLeadStatusUpdate, setWonLeadStatusUpdate] = useState({
+        status: 'Deal Won',
+        remarks: '',
+        followupDate: '',
+        bookingDetails: { amount: '', project: '', bookingDate: '' },
+        notInterestedMainReason: '',
+        notInterestedReason: ''
+    });
+
+    const handleUpdateWonLeadStatus = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.put(`http://localhost:5000/api/leads/update-won-status/${editingWonLead.id}`,
+                wonLeadStatusUpdate,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            setEditingWonLead(null);
+            fetchLeads();
+            fetchReports();
+            fetchFollowupStatusLeads();
+            alert('Won lead status updated successfully!');
+        } catch (error) {
+            console.error(error);
+            alert(error.response?.data?.error || 'Failed to update lead status.');
+        }
+    };
 
     const checkMissedFollowups = async () => {
         try {
@@ -749,8 +776,8 @@ const AdminDashboard = () => {
                                                         <td className="px-3 sm:px-6 py-3 sm:py-4">
                                                             <div className="flex items-start space-x-2">
                                                                 <div className="flex-1">
-                                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name}</div>
-                                                                    <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
+                                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
+                                                                    <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.customer_email || lead.sender_email}</div>
                                                                     {lead.phone && (
                                                                         <div className="text-xs text-gray-500 mt-1">{lead.phone}</div>
                                                                     )}
@@ -904,8 +931,8 @@ const AdminDashboard = () => {
                                         {leads.filter(l => l.status === 'Not Interested').map(lead => (
                                             <tr key={lead.id} className="hover:bg-red-50/10 transition-all">
                                                 <td className="px-3 sm:px-6 py-4">
-                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name || 'Anonymous'}</div>
-                                                    <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
+                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
+                                                    <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.customer_email || lead.sender_email}</div>
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-4">
                                                     <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
@@ -930,9 +957,18 @@ const AdminDashboard = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-4">
-                                                    <div className="text-xs font-semibold text-gray-500">
-                                                        {lead.updated_at ? new Date(lead.updated_at).toLocaleDateString() : 'N/A'}
-                                                    </div>
+                                                    {lead.lost_date ? (
+                                                        <div>
+                                                            <div className="text-xs font-bold text-gray-700">
+                                                                {new Date(lead.lost_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-400 mt-0.5">
+                                                                {new Date(lead.lost_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic">Not recorded</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-3 sm:px-6 py-4 text-center">
                                                     <button
@@ -989,8 +1025,8 @@ const AdminDashboard = () => {
                                             return (
                                                 <tr key={lead.id} className="hover:bg-emerald-50/10 transition-all">
                                                     <td className="px-3 sm:px-6 py-4">
-                                                        <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name || 'Anonymous'}</div>
-                                                        <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
+                                                        <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
+                                                        <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.customer_email || lead.sender_email}</div>
                                                     </td>
                                                     <td className="px-3 sm:px-6 py-4">
                                                         <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
@@ -1018,13 +1054,37 @@ const AdminDashboard = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-3 sm:px-6 py-4 text-center">
-                                                        <button
-                                                            onClick={() => fetchLeadFollowupHistory(lead.id)}
-                                                            className="p-2 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
-                                                            title="View interactions"
-                                                        >
-                                                            <Clock size={18} />
-                                                        </button>
+                                                        <div className="flex justify-center space-x-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    const booking = lead.booking_details ? (typeof lead.booking_details === 'string' ? JSON.parse(lead.booking_details) : lead.booking_details) : { amount: '', project: '', bookingDate: '' };
+                                                                    setEditingWonLead(lead);
+                                                                    setWonLeadStatusUpdate({
+                                                                        status: 'Deal Won',
+                                                                        remarks: '',
+                                                                        followupDate: '',
+                                                                        bookingDetails: {
+                                                                            amount: booking.amount || '',
+                                                                            project: booking.project || '',
+                                                                            bookingDate: booking.bookingDate ? new Date(booking.bookingDate).toISOString().split('T')[0] : ''
+                                                                        },
+                                                                        notInterestedMainReason: '',
+                                                                        notInterestedReason: ''
+                                                                    });
+                                                                }}
+                                                                className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-xl transition-all"
+                                                                title="Edit Status"
+                                                            >
+                                                                <RefreshCw size={18} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => fetchLeadFollowupHistory(lead.id)}
+                                                                className="p-2 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
+                                                                title="View interactions"
+                                                            >
+                                                                <Clock size={18} />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -1557,6 +1617,168 @@ const AdminDashboard = () => {
                     </div>
                 )
             }
+
+            {/* Edit Won Lead Status Modal */}
+            {editingWonLead && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[130] backdrop-blur-md">
+                    <div className="bg-white rounded-[40px] p-10 max-w-2xl w-full shadow-2xl animate-in max-h-[90vh] overflow-y-auto border border-gray-100 relative">
+                        <div className="flex justify-between items-start mb-8">
+                            <div>
+                                <h2 className="text-3xl font-black text-gray-900 mb-2">Revise Won Deal</h2>
+                                <p className="text-gray-500 font-medium">Customer: <span className="text-gray-900 font-bold">{editingWonLead.customer_name || editingWonLead.sender_name || 'Anonymous'}</span></p>
+                            </div>
+                            <button onClick={() => setEditingWonLead(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-3 rounded-2xl transition hover:rotate-90">
+                                <XCircle size={28} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdateWonLeadStatus} className="space-y-8">
+                            <div>
+                                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-4">New Outcome Status</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {[
+                                        { id: 'Follow-up', desc: 'Revert to Pipeline', icon: <Clock size={24} />, color: 'peer-checked:bg-yellow-500 peer-checked:text-white peer-checked:border-yellow-500' },
+                                        { id: 'Not Interested', desc: 'Mark as Lost', icon: <XCircle size={24} />, color: 'peer-checked:bg-red-500 peer-checked:text-white peer-checked:border-red-500' },
+                                        { id: 'Deal Won', desc: 'Adjust Booking', icon: <CheckCircle size={24} />, color: 'peer-checked:bg-green-600 peer-checked:text-white peer-checked:border-green-600' },
+                                        { id: 'Assigned', desc: 'Reset to Assigned', icon: <User size={24} />, color: 'peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600' }
+                                    ].map(opt => (
+                                        <div key={opt.id} className="relative">
+                                            <input
+                                                type="radio" name="wonStatus" id={`won-${opt.id}`} className="peer hidden"
+                                                value={opt.id} checked={wonLeadStatusUpdate.status === opt.id}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, status: e.target.value })}
+                                            />
+                                            <label htmlFor={`won-${opt.id}`} className={`flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-[32px] cursor-pointer hover:border-blue-200 transition-all ${opt.color}`}>
+                                                {opt.icon}
+                                                <span className="text-sm font-black mt-3">{opt.id}</span>
+                                                <span className="text-[10px] opacity-60 font-medium">{opt.desc}</span>
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {wonLeadStatusUpdate.status === 'Not Interested' && (
+                                <div className="space-y-6 animate-in p-8 bg-red-50/50 rounded-[32px] border border-red-100">
+                                    <h3 className="font-black text-red-800 flex items-center space-x-3">
+                                        <XCircle size={24} />
+                                        <span>Specify Reason for Rejection</span>
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-6">
+                                        <div>
+                                            <label className="block text-xs font-bold text-red-700 uppercase mb-2">Primary Reason</label>
+                                            <select
+                                                className="w-full p-4 bg-white border-2 border-red-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-400/20 focus:border-red-400 font-bold appearance-none cursor-pointer"
+                                                value={wonLeadStatusUpdate.notInterestedMainReason}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, notInterestedMainReason: e.target.value })}
+                                                required
+                                            >
+                                                <option value="">Select a reason</option>
+                                                <option value="Too Expensive">Too Expensive</option>
+                                                <option value="Location Issue">Location Issue</option>
+                                                <option value="Property Size">Property Size</option>
+                                                <option value="Not Ready to Buy">Not Ready to Buy</option>
+                                                <option value="Already Bought Elsewhere">Already Bought Elsewhere</option>
+                                                <option value="Investment not suitable">Investment not suitable</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        {wonLeadStatusUpdate.notInterestedMainReason === 'Other' && (
+                                            <div className="animate-in">
+                                                <label className="block text-xs font-bold text-red-700 uppercase mb-2">Detailed Reason</label>
+                                                <textarea
+                                                    className="w-full p-4 bg-white border-2 border-red-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-400/20 focus:border-red-400 font-medium" rows="3"
+                                                    placeholder="Type context for the loss..."
+                                                    value={wonLeadStatusUpdate.notInterestedReason}
+                                                    onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, notInterestedReason: e.target.value })}
+                                                    required
+                                                ></textarea>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {wonLeadStatusUpdate.status === 'Follow-up' && (
+                                <div className="space-y-6 animate-in p-8 bg-yellow-50/50 rounded-[32px] border border-yellow-100">
+                                    <h3 className="font-black text-yellow-800 flex items-center space-x-3">
+                                        <Clock size={24} />
+                                        <span>Re-Schedule Follow-up</span>
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-6">
+                                        <div>
+                                            <label className="block text-xs font-bold text-yellow-700 uppercase mb-2">New Follow-up Date</label>
+                                            <input
+                                                type="date" className="w-full p-4 bg-white border-2 border-yellow-100 rounded-2xl outline-none focus:ring-4 focus:ring-yellow-400/20 focus:border-yellow-400 font-bold"
+                                                value={wonLeadStatusUpdate.followupDate}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, followupDate: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-yellow-700 uppercase mb-2">Revision Notes</label>
+                                            <textarea
+                                                className="w-full p-4 bg-white border-2 border-yellow-100 rounded-2xl outline-none focus:ring-4 focus:ring-yellow-400/20 focus:border-yellow-400 font-medium" rows="3"
+                                                placeholder="Why are we reverting this won deal?"
+                                                value={wonLeadStatusUpdate.remarks}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, remarks: e.target.value })}
+                                            ></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {wonLeadStatusUpdate.status === 'Deal Won' && (
+                                <div className="space-y-6 animate-in p-8 bg-green-50 rounded-[32px] border border-green-100 shadow-sm">
+                                    <h3 className="font-extrabold text-green-800 text-xl flex items-center space-x-3">
+                                        <div className="p-2 bg-green-500 text-white rounded-xl flex items-center space-x-2">
+                                            <RupeeIcon size={20} />
+                                            <CheckCircle size={20} />
+                                        </div>
+                                        <span>Adjust Booking Details</span>
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-xs font-bold text-green-700 uppercase mb-2">Project Name</label>
+                                            <input
+                                                type="text" className="w-full p-4 bg-white border border-green-200 rounded-2xl outline-none focus:ring-4 focus:ring-green-400/20 font-bold"
+                                                placeholder="e.g. Prestige Green Valley"
+                                                value={wonLeadStatusUpdate.bookingDetails.project}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, bookingDetails: { ...wonLeadStatusUpdate.bookingDetails, project: e.target.value } })}
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-green-700 uppercase mb-2">Booking Amount (₹)</label>
+                                            <input
+                                                type="number" className="w-full p-4 bg-white border border-green-200 rounded-2xl outline-none focus:ring-4 focus:ring-green-400/20 font-black text-lg"
+                                                placeholder="0.00"
+                                                value={wonLeadStatusUpdate.bookingDetails.amount}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, bookingDetails: { ...wonLeadStatusUpdate.bookingDetails, amount: e.target.value } })}
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-green-700 uppercase mb-2">Booking Date</label>
+                                            <input
+                                                type="date" className="w-full p-4 bg-white border border-green-200 rounded-2xl outline-none focus:ring-4 focus:ring-green-400/20 font-bold"
+                                                value={wonLeadStatusUpdate.bookingDetails.bookingDate}
+                                                onChange={(e) => setWonLeadStatusUpdate({ ...wonLeadStatusUpdate, bookingDetails: { ...wonLeadStatusUpdate.bookingDetails, bookingDate: e.target.value } })}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <button type="submit" className="w-full py-5 bg-gray-900 text-white rounded-[24px] font-black text-xl hover:bg-black transition-all shadow-2xl hover:translate-y-[-2px] active:scale-95">
+                                Update Conversion Status
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
         </div >
     );
 };

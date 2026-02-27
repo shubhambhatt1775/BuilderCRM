@@ -66,10 +66,15 @@ exports.updateLeadStatus = async (req, res) => {
 
         // 1. Update lead status
         if (status === 'Not Interested') {
-            await connection.query('UPDATE leads SET status = ?, not_interested_main_reason = ?, not_interested_reason = ? WHERE id = ?',
-                [status, notInterestedMainReason || null, notInterestedReason || null, leadId]);
+            await connection.query(
+                'UPDATE leads SET status = ?, not_interested_main_reason = ?, not_interested_reason = ?, lost_date = NOW() WHERE id = ?',
+                [status, notInterestedMainReason || null, notInterestedReason || null, leadId]
+            );
         } else {
-            await connection.query('UPDATE leads SET status = ?, not_interested_main_reason = NULL, not_interested_reason = NULL WHERE id = ?', [status, leadId]);
+            await connection.query(
+                'UPDATE leads SET status = ?, not_interested_main_reason = NULL, not_interested_reason = NULL, lost_date = NULL WHERE id = ?',
+                [status, leadId]
+            );
         }
 
         // 2. Mark all previous pending or missed followups for this lead as 'Completed'
@@ -1448,5 +1453,86 @@ exports.resendWhatsAppGreeting = async (req, res) => {
     } catch (err) {
         console.error('Error resending WhatsApp greeting:', err);
         res.status(500).json({ error: err.message });
+    }
+};
+
+// Admin-only: Update status of a 'Deal Won' lead (e.g., revert or correct status)
+exports.updateWonLeadStatus = async (req, res) => {
+    const { leadId } = req.params;
+    const { status, remarks, followupDate, notInterestedMainReason, notInterestedReason, bookingDetails } = req.body;
+    const adminId = req.user.id;
+
+    // Only allow changing won leads to these statuses
+    const allowedStatuses = ['Follow-up', 'Not Interested', 'Assigned', 'Deal Won'];
+    if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` });
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Verify the lead is currently 'Deal Won'
+        const [leadRows] = await connection.query('SELECT * FROM leads WHERE id = ?', [leadId]);
+        if (!leadRows.length) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Lead not found' });
+        }
+        const lead = leadRows[0];
+        if (lead.status !== 'Deal Won' && lead.status !== 'Won' && lead.status !== 'WON' && lead.status !== 'DEAL WON') {
+            await connection.rollback();
+            return res.status(400).json({ error: 'Only leads with status "Deal Won" can be edited via this endpoint' });
+        }
+
+        // 2. Remove the existing booking record for this lead
+        await connection.query('DELETE FROM bookings WHERE lead_id = ?', [leadId]);
+
+        // 3. Update lead status
+        if (status === 'Not Interested') {
+            await connection.query(
+                'UPDATE leads SET status = ?, not_interested_main_reason = ?, not_interested_reason = ?, lost_date = NOW() WHERE id = ?',
+                [status, notInterestedMainReason || null, notInterestedReason || null, leadId]
+            );
+        } else if (status === 'Deal Won') {
+            // Admin is re-setting won with new booking details
+            await connection.query(
+                'UPDATE leads SET status = ?, not_interested_main_reason = NULL, not_interested_reason = NULL, lost_date = NULL WHERE id = ?',
+                [status, leadId]
+            );
+            if (bookingDetails) {
+                const { amount, project, bookingDate } = bookingDetails;
+                await connection.query(
+                    'INSERT INTO bookings (lead_id, salesman_id, booking_date, amount, project) VALUES (?, ?, ?, ?, ?)',
+                    [leadId, lead.assigned_to || adminId, bookingDate, amount, project]
+                );
+            }
+        } else {
+            await connection.query(
+                'UPDATE leads SET status = ?, not_interested_main_reason = NULL, not_interested_reason = NULL, lost_date = NULL WHERE id = ?',
+                [status, leadId]
+            );
+        }
+
+        // 4. If reverting to Follow-up, create a new followup record
+        if (status === 'Follow-up' && followupDate) {
+            // Mark any lingering followups as Completed first
+            await connection.query(
+                'UPDATE followups SET status = ? WHERE lead_id = ? AND (status = ? OR status = ?)',
+                ['Completed', leadId, 'Pending', 'Missed']
+            );
+            await connection.query(
+                'INSERT INTO followups (lead_id, salesman_id, followup_date, remarks) VALUES (?, ?, ?, ?)',
+                [leadId, lead.assigned_to || adminId, followupDate, remarks || 'Status revised by admin']
+            );
+        }
+
+        await connection.commit();
+        res.json({ message: `Won lead status updated to ${status} by admin` });
+    } catch (err) {
+        await connection.rollback();
+        console.error('Error updating won lead status:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        connection.release();
     }
 };

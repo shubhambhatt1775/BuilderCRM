@@ -33,7 +33,7 @@ Thanks for reaching out. Our team will contact you shortly.`;
             const cleanPhone = this.validateAndCleanPhone(phoneNumber);
             if (!cleanPhone) {
                 const error = new Error('Invalid phone number format');
-                await whatsappLogger.logError(phoneNumber, clientName, leadId, error);
+                // No need to log here as callers should handle validation or use logSkippedMessage
                 throw error;
             }
 
@@ -57,21 +57,38 @@ Thanks for reaching out. Our team will contact you shortly.`;
                 timeout: 10000 // 10 second timeout
             });
 
-            // Log success
-            await whatsappLogger.logSuccess(cleanPhone, clientName, leadId, response.data);
-            
-            return {
-                success: true,
-                phoneNumber: cleanPhone,
-                message: personalizedMessage,
-                timestamp: new Date().toISOString(),
-                apiResponse: response.data
-            };
+            // CRITICAL FIX: Check if the response is actually 'success'
+            // Some providers return 200 OK even for HTML maintenance pages
+            const isActualSuccess = response.data === 'success' || (response.data && response.data.status === 'success');
+
+            if (isActualSuccess) {
+                // Log success
+                await whatsappLogger.logSuccess(cleanPhone, clientName, leadId, response.data);
+
+                return {
+                    success: true,
+                    phoneNumber: cleanPhone,
+                    message: personalizedMessage,
+                    timestamp: new Date().toISOString(),
+                    apiResponse: response.data
+                };
+            } else {
+                const error = new Error('API returned success status but body did not confirm message scheduling');
+                await whatsappLogger.logError(cleanPhone, clientName, leadId, error, response.data);
+
+                return {
+                    success: false,
+                    phoneNumber: cleanPhone,
+                    error: error.message,
+                    timestamp: new Date().toISOString(),
+                    apiError: response.data
+                };
+            }
 
         } catch (error) {
             // Log error with detailed information
             await whatsappLogger.logError(phoneNumber, clientName, leadId, error, error.response?.data || null);
-            
+
             return {
                 success: false,
                 phoneNumber: phoneNumber,

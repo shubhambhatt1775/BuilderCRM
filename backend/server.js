@@ -5,6 +5,7 @@ const userRoutes = require('./routes/userRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const emailCronService = require('./services/emailCronService');
 const missedLeadCronService = require('./services/missedLeadCronService');
+const { fetchEmails } = require('./services/emailService');
 
 console.log('🔧 Using email credentials from .env file');
 
@@ -38,11 +39,15 @@ app.use('/api/leads', leadRoutes); // Lead management operations
  * - Triggers immediate email fetching from dashboard refresh button
  * - Returns processing statistics
  */
-app.post('/api/fetch-emails', (req, res) => {
-    const { fetchAllEmailsUltimate } = require('./ultimateEmailFetch');
+app.post('/api/fetch-emails', async (req, res) => {
     console.log('🔄 Manual email fetch requested...');
-    fetchAllEmailsUltimate();
-    res.json({ message: 'Email fetching started with direct credentials' });
+    try {
+        await fetchEmails();
+        res.json({ message: 'Email fetching started successfully' });
+    } catch (error) {
+        console.error('❌ Manual fetch error:', error.message);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 /**
@@ -54,7 +59,7 @@ app.post('/api/process-missed-leads', async (req, res) => {
     try {
         console.log('🔄 Manual missed lead processing requested...');
         const results = await missedLeadCronService.runManually();
-        res.json({ 
+        res.json({
             message: 'Missed lead processing completed',
             results: results
         });
@@ -83,22 +88,20 @@ app.get('/api/missed-leads-stats', async (req, res) => {
  * - Used by frontend refresh button to fetch new emails
  * - Returns detailed processing results
  */
-app.post('/api/refresh-emails', (req, res) => {
-    const { fetchAllEmailsUltimate } = require('./ultimateEmailFetch');
-    console.log('🔄 Dashboard refresh - fetching ALL emails...');
-    fetchAllEmailsUltimate()
-        .then(result => {
-            res.json({ 
-                message: 'Email refresh completed successfully',
-                processed: result.processed,
-                skipped: result.skipped,
-                total: result.total
-            });
-        })
-        .catch(error => {
-            console.error('❌ Refresh error:', error);
-            res.status(500).json({ error: error.message });
+app.post('/api/refresh-emails', async (req, res) => {
+    console.log('🔄 Dashboard refresh - fetching emails...');
+    try {
+        const result = await fetchEmails();
+        res.json({
+            message: 'Email refresh completed successfully',
+            processed: result.processed || 0,
+            skipped: result.skipped || 0,
+            total: result.total || 0
         });
+    } catch (error) {
+        console.error('❌ Refresh error:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Start server and initialize services

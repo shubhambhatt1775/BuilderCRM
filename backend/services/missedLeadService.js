@@ -68,17 +68,17 @@ Call us on +91 99887 76655 or email {{email}}.`;
 
         try {
             console.log('🚀 Starting missed lead processing...');
-            
+
             const missedLeads = await this.findMissedLeads();
             results.total = missedLeads.length;
 
             for (const lead of missedLeads) {
                 try {
                     results.processed++;
-                    
+
                     // Send WhatsApp follow-up message
                     const messageResult = await this.sendMissedFollowup(lead);
-                    
+
                     if (messageResult.success) {
                         results.successful++;
                         await this.markMissedFollowupAsSent(lead.id);
@@ -130,36 +130,9 @@ Call us on +91 99887 76655 or email {{email}}.`;
                 personalizedMessage
             );
 
-            // Log the missed follow-up attempt
-            if (result.success) {
-                await whatsappLogger.logSuccess(
-                    lead.phone,
-                    lead.sender_name,
-                    lead.id,
-                    result.apiResponse,
-                    'missed_followup'
-                );
-            } else {
-                await whatsappLogger.logError(
-                    lead.phone,
-                    lead.sender_name,
-                    lead.id,
-                    new Error(result.error),
-                    result.apiError,
-                    'missed_followup'
-                );
-            }
-
             return result;
         } catch (error) {
-            await whatsappLogger.logError(
-                lead.phone,
-                lead.sender_name,
-                lead.id,
-                error,
-                null,
-                'missed_followup'
-            );
+            console.error(`Error sending missed follow-up for lead ${lead.id}:`, error.message);
             throw error;
         }
     }
@@ -239,14 +212,14 @@ Call us on +91 99887 76655 or email {{email}}.`;
      */
     async resetMissedFollowupFlag(leadId = null) {
         try {
-            const query = leadId 
+            const query = leadId
                 ? 'UPDATE leads SET missed_followup_sent = FALSE WHERE id = ?'
                 : 'UPDATE leads SET missed_followup_sent = FALSE';
-            
+
             const params = leadId ? [leadId] : [];
-            
+
             await pool.query(query, params);
-            
+
             console.log(`🔄 Reset missed follow-up flag${leadId ? ` for lead ${leadId}` : ' for all leads'}`);
             return true;
         } catch (error) {

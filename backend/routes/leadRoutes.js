@@ -41,5 +41,6 @@ router.post('/whatsapp/send/:leadId', auth, leadController.sendWhatsAppGreeting)
 router.post('/whatsapp/resend/:leadId', auth, leadController.resendWhatsAppGreeting);
 router.get('/whatsapp/stats', auth, adminOnly, leadController.getWhatsAppStats);
 router.get('/whatsapp/errors', auth, adminOnly, leadController.getWhatsAppErrors);
+router.put('/update-won-status/:leadId', auth, adminOnly, leadController.updateWonLeadStatus);
 
 module.exports = router;

@@ -172,6 +172,8 @@ WHATSAPP_GREETING_TEMPLATE=hello_world
 - **Dashboard Data Prioritization**: Dashboard now displays "True Lead" info extracted from body over email headers.
 - **Lead Deletion Maintenance**: Added capability to clear leads for database reset/testing.
 - **Smart Duplicate Prevention**: Only prevents exact duplicates (email + subject) within 24 hours.
+- **Admin Won Deal Management**: Admins can now edit the status of "Deal Won" leads (e.g., reverting to Follow-up or correcting booking errors), while salesmen remain strictly restricted from altering won lead data.
+- **Enhanced Status Revision Modal**: A new premium modal for admins allowing complex state transitions for closed deals with integrated validation.
 
 ### Core Capabilities
 - **Real-time Processing**: Instant email-to-lead conversion
@@ -265,6 +267,7 @@ The system runs automatically when the backend server starts. To customize:
 - `POST /api/leads/update-status` - Update lead status
 - `GET /api/leads/today-followups` - Get today's follow-ups
 - `GET /api/leads/admin-reports` - Get performance reports
+- `PUT /api/leads/update-won-status/:leadId` - Revision of won leads (Admin only)
 
 ### Email Operations
 - `POST /api/fetch-emails` - Manual email fetch
