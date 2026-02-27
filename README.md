@@ -171,7 +171,11 @@ WHATSAPP_GREETING_TEMPLATE=hello_world
 - **Automated "Unknown" Handling**: Handles missing lead names with sequential numbering (unknown clientX).
 - **Dashboard Data Prioritization**: Dashboard now displays "True Lead" info extracted from body over email headers.
 - **Lead Deletion Maintenance**: Added capability to clear leads for database reset/testing.
-- **Smart Duplicate Prevention**: Only prevents exact duplicates (email + subject) within 24 hours.
+- **Multi-Layer Deduplication**: 
+  - **Identical Lead Prevention**: Prevents duplicate email/subjects within 24 hours.
+  - **Anti-Spam Phone Tracking**: Prevents multiple WhatsApp greetings to the same phone number within a 1-hour window.
+  - **In-Memory Session Lock**: Prevents race conditions during simultaneous email processing.
+- **Robust WhatsApp API Validation**: Enhanced response checking that detects "Maintenance/Coming Soon" pages even if they return a 200 OK status, ensuring database accuracy.
 - **Admin Won Deal Management**: Admins can now edit the status of "Deal Won" leads (e.g., reverting to Follow-up or correcting booking errors), while salesmen remain strictly restricted from altering won lead data.
 - **Enhanced Status Revision Modal**: A new premium modal for admins allowing complex state transitions for closed deals with integrated validation.
 
