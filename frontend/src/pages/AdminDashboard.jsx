@@ -56,12 +56,28 @@ const AdminDashboard = () => {
     };
 
     const hasMissedFollowup = (lead) => {
-        // Check if lead has any missed follow-ups in the followup history
-        if (followupStatusLeads) {
-            const leadWithHistory = followupStatusLeads.find(l => l.id === lead.id);
-            if (leadWithHistory && leadWithHistory.followupHistory) {
-                return leadWithHistory.followupHistory.some(f => f.urgency_status === 'overdue' || f.status === 'Missed');
-            }
+        if (!followupStatusLeads) return false;
+        const leadWithHistory = followupStatusLeads.find(l => l.id === lead.id);
+        if (leadWithHistory && leadWithHistory.followupHistory) {
+            return leadWithHistory.followupHistory.some(f => f.urgency_status === 'overdue' || f.status === 'Missed');
+        }
+        return false;
+    };
+
+    const hasTodayFollowup = (lead) => {
+        if (!followupStatusLeads) return false;
+        const leadWithHistory = followupStatusLeads.find(l => l.id === lead.id);
+        if (leadWithHistory && leadWithHistory.followupHistory) {
+            return leadWithHistory.followupHistory.some(f => f.urgency_status === 'today');
+        }
+        return false;
+    };
+
+    const hasFutureFollowup = (lead) => {
+        if (!followupStatusLeads) return false;
+        const leadWithHistory = followupStatusLeads.find(l => l.id === lead.id);
+        if (leadWithHistory && leadWithHistory.followupHistory) {
+            return leadWithHistory.followupHistory.some(f => f.urgency_status === 'upcoming');
         }
         return false;
     };
@@ -384,20 +400,25 @@ const AdminDashboard = () => {
                         const totalLeads = leads.length || 0;
                         const dealsWon = leads.filter(l => l.status === 'Deal Won').length || 0;
                         const inPipeline = leads.filter(l => l.status === 'Assigned' || l.status === 'Follow-up').length || 0;
-                        const missedLeads = getTotalMissedLeads(); // Use calculated total from all salesmen
+                        const lostLeads = leads.filter(l => l.status === 'Not Interested').length || 0;
+                        const missedLeads = getTotalMissedLeads();
                         const revenue = reports?.salesmanPerf?.reduce((acc, s) => acc + parseFloat(s.total_revenue || 0), 0).toLocaleString() || 0;
 
                         const stats = [
-                            { label: 'Total Leads', value: totalLeads, icon: <Mail />, color: 'blue' },
-                            { label: 'Deals Won', value: dealsWon, icon: <TrendingUp />, color: 'emerald' },
-                            { label: 'In Pipeline', value: inPipeline, icon: <Target />, color: 'amber' },
-                            { label: 'Missed Leads', value: missedLeads, icon: <XCircle />, color: 'red' },
-                            { label: 'Revenue Generated', value: `₹${revenue}`, icon: <RupeeIcon />, color: 'indigo' }
+                            { label: 'Total Leads', value: totalLeads, icon: <Mail />, color: 'blue', tab: 'leads' },
+                            { label: 'Deals Won', value: dealsWon, icon: <TrendingUp />, color: 'emerald', tab: 'won' },
+                            { label: 'In Pipeline', value: inPipeline, icon: <Target />, color: 'amber', tab: 'leads' },
+                            { label: 'Missed Leads', value: missedLeads, icon: <XCircle />, color: 'red', tab: 'leads' },
+                            { label: 'Lost Leads', value: lostLeads, icon: <XCircle />, color: 'gray', tab: 'lost' },
                         ];
 
                         return stats.map((stat, i) => (
-                            <div key={i} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-3 sm:space-x-4 hover:shadow-md transition-all">
-                                <div className={`p-3 sm:p-4 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl sm:rounded-2xl flex-shrink-0`}>
+                            <div
+                                key={i}
+                                onClick={() => stat.tab && setActiveTab(stat.tab)}
+                                className={`bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm flex items-center space-x-3 sm:space-x-4 hover:shadow-md transition-all cursor-pointer group hover:border-blue-100 ${stat.label === 'Missed Leads' && stat.value > 0 ? 'bg-red-50 border-red-200 animate-pulse ring-2 ring-red-100' : ''}`}
+                            >
+                                <div className={`p-3 sm:p-4 ${stat.label === 'Missed Leads' && stat.value > 0 ? 'bg-red-600 text-white' : `bg-${stat.color}-50 text-${stat.color}-600`} rounded-xl sm:rounded-2xl flex-shrink-0 group-hover:scale-110 transition-transform`}>
                                     {stat.icon}
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -429,12 +450,20 @@ const AdminDashboard = () => {
                             <span className="xs:hidden">Performance</span>
                         </button>
                         <button
-                            onClick={() => setActiveTab('followup')}
-                            className={`flex items-center space-x-2 sm:space-x-3 px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-[24px] font-black text-sm transition-all whitespace-nowrap ${activeTab === 'followup' ? 'bg-gray-900 text-white shadow-xl px-6 sm:px-12' : 'text-gray-400 hover:bg-gray-50'}`}
+                            onClick={() => setActiveTab('won')}
+                            className={`flex items-center space-x-2 sm:space-x-3 px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-[24px] font-black text-sm transition-all whitespace-nowrap ${activeTab === 'won' ? 'bg-gray-900 text-white shadow-xl px-6 sm:px-12' : 'text-gray-400 hover:bg-gray-50'}`}
                         >
-                            <Clock size={16} />
-                            <span className="hidden xs:inline">Follow-up Status</span>
-                            <span className="xs:hidden">Follow-up</span>
+                            <CheckCircle size={16} />
+                            <span className="hidden xs:inline">Won Deals</span>
+                            <span className="xs:hidden">Won</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('lost')}
+                            className={`flex items-center space-x-2 sm:space-x-3 px-4 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-[24px] font-black text-sm transition-all whitespace-nowrap ${activeTab === 'lost' ? 'bg-gray-900 text-white shadow-xl px-6 sm:px-12' : 'text-gray-400 hover:bg-gray-50'}`}
+                        >
+                            <XCircle size={16} />
+                            <span className="hidden xs:inline">Lost Deals</span>
+                            <span className="xs:hidden">Lost</span>
                         </button>
                     </div>
 
@@ -457,118 +486,163 @@ const AdminDashboard = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
-                                        {leads.map(lead => (
-                                            <tr key={lead.id} className="hover:bg-blue-50/20 transition-all group">
-                                                <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
-                                                    <div className="text-gray-400 font-medium text-xs">{lead.customer_email || lead.sender_email}</div>
-                                                </td>
-                                                <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    <div className="flex flex-col space-y-2">
-                                                        <div className="font-bold text-gray-900 flex items-center space-x-2">
-                                                            {lead.customer_phone || lead.phone ? (
-                                                                <a href={`tel:${lead.customer_phone || lead.phone}`} className="hover:text-blue-600 transition-colors flex items-center space-x-2 text-sm">
-                                                                    <Phone size={12} className="text-gray-400 flex-shrink-0" />
-                                                                    <span className="truncate">{lead.customer_phone || lead.phone}</span>
-                                                                </a>
-                                                            ) : (
-                                                                <span className="text-gray-400 text-sm">No Number</span>
+                                        {leads.sort((a, b) => {
+                                            const aMissed = a.status === 'Follow-up' && hasMissedFollowup(a);
+                                            const bMissed = b.status === 'Follow-up' && hasMissedFollowup(b);
+                                            if (aMissed && !bMissed) return -1;
+                                            if (!aMissed && bMissed) return 1;
+
+                                            const aToday = a.status === 'Follow-up' && hasTodayFollowup(a);
+                                            const bToday = b.status === 'Follow-up' && hasTodayFollowup(b);
+                                            if (aToday && !bToday) return -1;
+                                            if (!aToday && bToday) return 1;
+
+                                            const aFuture = a.status === 'Follow-up' && hasFutureFollowup(a);
+                                            const bFuture = b.status === 'Follow-up' && hasFutureFollowup(b);
+                                            if (aFuture && !bFuture) return -1;
+                                            if (!aFuture && bFuture) return 1;
+
+                                            return 0;
+                                        }).map(lead => {
+                                            const isMissed = hasMissedFollowup(lead);
+                                            const isToday = hasTodayFollowup(lead);
+                                            return (
+                                                <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${isMissed ? 'bg-red-50/80 border-l-[6px] border-red-600 shadow-[inset_10px_0_10px_-10px_rgba(220,38,38,0.2)]' : isToday ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
+                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                        <div className="flex items-start justify-between">
+                                                            <div>
+                                                                <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
+                                                                <div className="text-gray-400 font-medium text-xs">{lead.customer_email || lead.sender_email}</div>
+                                                            </div>
+                                                            {isToday && (
+                                                                <div className="flex-shrink-0 ml-2">
+                                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse uppercase">
+                                                                        TODAY
+                                                                    </span>
+                                                                </div>
                                                             )}
                                                         </div>
-                                                        {lead.phone && (
-                                                            <a
-                                                                href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-emerald-500 hover:text-emerald-600 transition-colors flex items-center space-x-1 text-sm"
-                                                            >
-                                                                <MessageSquare size={12} className="flex-shrink-0" />
-                                                                <span>WhatsApp</span>
-                                                            </a>
-                                                        )}
-                                                        <div className="mt-1">
-                                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                                                lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                                                    lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                                                        'bg-gray-50 text-gray-400 border border-gray-100'
-                                                                }`}>
-                                                                WA: {lead.whatsapp_status}
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                        <div className="flex flex-col space-y-2">
+                                                            <div className="font-bold text-gray-900 flex items-center space-x-2">
+                                                                {lead.customer_phone || lead.phone ? (
+                                                                    <a href={`tel:${lead.customer_phone || lead.phone}`} className="hover:text-blue-600 transition-colors flex items-center space-x-2 text-sm">
+                                                                        <Phone size={12} className="text-gray-400 flex-shrink-0" />
+                                                                        <span className="truncate">{lead.customer_phone || lead.phone}</span>
+                                                                    </a>
+                                                                ) : (
+                                                                    <span className="text-gray-400 text-sm">No Number</span>
+                                                                )}
+                                                            </div>
+                                                            {lead.phone && (
+                                                                <a
+                                                                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-emerald-500 hover:text-emerald-600 transition-colors flex items-center space-x-1 text-sm"
+                                                                >
+                                                                    <MessageSquare size={12} className="flex-shrink-0" />
+                                                                    <span>WhatsApp</span>
+                                                                </a>
+                                                            )}
+                                                            <div className="mt-1">
+                                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${lead.whatsapp_status === 'Sent' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                                                    lead.whatsapp_status === 'Failed' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                                                        lead.whatsapp_status === 'Not Configured' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                                                            'bg-gray-50 text-gray-400 border border-gray-100'
+                                                                    }`}>
+                                                                    WA: {lead.whatsapp_status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-3 sm:py-4 max-w-xs">
+                                                        <div
+                                                            onClick={() => setViewMessage(lead)}
+                                                            className="cursor-pointer hover:bg-gray-100 p-2 rounded-xl transition-all border border-transparent hover:border-blue-100 group/msg"
+                                                        >
+                                                            <div className="font-bold text-[10px] text-gray-400 mb-0.5 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
+                                                            <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 mt-1">
+                                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wide bg-blue-50 text-blue-600 border border-blue-100`}>
+                                                                {`Direct Email From ${lead.sender_email}`}
                                                             </span>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 sm:px-6 py-3 sm:py-4 max-w-xs">
-                                                    <div
-                                                        onClick={() => setViewMessage(lead)}
-                                                        className="cursor-pointer hover:bg-gray-100 p-2 rounded-xl transition-all border border-transparent hover:border-blue-100 group/msg"
-                                                    >
-                                                        <div className="font-bold text-[10px] text-gray-400 mb-0.5 uppercase tracking-tight truncate group-hover/msg:text-blue-500">{lead.subject}</div>
-                                                        <div className="text-xs text-gray-600 line-clamp-1">{lead.body}</div>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 mt-1">
-                                                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wide bg-blue-50 text-blue-600 border border-blue-100`}>
-                                                            {`Direct Email From ${lead.sender_email}`}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    {lead.assigned_to ? (
-                                                        <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
-                                                            <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
-                                                                {salesmen.find(s => s.id === lead.assigned_to)?.name?.[0] || 'U'}
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                        {lead.assigned_to ? (
+                                                            <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
+                                                                <div className="w-5 h-5 sm:w-6 sm:h-6 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
+                                                                    {salesmen.find(s => s.id === lead.assigned_to)?.name?.[0] || 'U'}
+                                                                </div>
+                                                                <span className="text-xs font-bold text-gray-700 truncate max-w-[100px] sm:max-w-none">{salesmen.find(s => s.id === lead.assigned_to)?.name || 'Admin'}</span>
                                                             </div>
-                                                            <span className="text-xs font-bold text-gray-700 truncate max-w-[100px] sm:max-w-none">{salesmen.find(s => s.id === lead.assigned_to)?.name || 'Admin'}</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-1 rounded border border-amber-100 uppercase">Unassigned</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    <div className="space-y-2">
-                                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Follow-up' && hasMissedFollowup(lead) ?
-                                                            'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
-                                                            lead.status === 'New' ? 'bg-blue-50 text-blue-700 ring-blue-700/10' :
-                                                                lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
-                                                                    lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
-                                                                        'bg-gray-50 text-gray-600 ring-gray-600/10'
-                                                            }`}>
-                                                            {lead.status}
-                                                        </span>
-                                                        {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
-                                                            <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
-                                                                MISSED
-                                                            </div>
-                                                        )}
-                                                        {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
-                                                            <div className={`text-xs font-medium px-2 py-1 rounded border ${hasMissedFollowup(lead) ?
-                                                                'text-red-700 bg-red-100 border-red-300 font-bold' :
-                                                                'text-amber-700 bg-amber-50 border-amber-200'
-                                                                }`}>
-                                                                📅 {getNextFollowupDate(lead)}
-                                                                {hasMissedFollowup(lead) && ' (Overdue)'}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 sm:px-6 py-3 sm:py-4">
-                                                    <div className="flex justify-center">
-                                                        {!lead.assigned_to ? (
-                                                            <button
-                                                                onClick={() => setSelectedLead(lead.id)}
-                                                                className="bg-blue-600 text-white px-2 sm:px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
-                                                            >
-                                                                <UserPlus size={12} />
-                                                                <span className="hidden sm:inline">Assign</span>
-                                                            </button>
                                                         ) : (
-                                                            <button className="text-gray-300 hover:text-blue-500 transition-colors">
-                                                                <ExternalLink size={16} />
-                                                            </button>
+                                                            <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-2 py-1 rounded border border-amber-100 uppercase">Unassigned</span>
                                                         )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                        <div className="space-y-2">
+                                                            <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ring-1 ring-inset ${lead.status === 'Follow-up' && hasMissedFollowup(lead) ?
+                                                                'bg-red-100 text-red-800 ring-red-800/20 animate-pulse' :
+                                                                lead.status === 'New' ? 'bg-blue-50 text-blue-700 ring-blue-700/10' :
+                                                                    lead.status === 'Assigned' ? 'bg-purple-50 text-purple-700 ring-purple-700/10' :
+                                                                        lead.status === 'Deal Won' ? 'bg-emerald-50 text-emerald-700 ring-emerald-700/10' :
+                                                                            'bg-gray-50 text-gray-600 ring-gray-600/10'
+                                                                }`}>
+                                                                {lead.status}
+                                                            </span>
+                                                            {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
+                                                                <div className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black bg-red-600 text-white border border-red-700 animate-pulse shadow-lg shadow-red-200 uppercase tracking-tighter">
+                                                                    🚨 OVERDUE MISSED
+                                                                </div>
+                                                            )}
+                                                            {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
+                                                                <div className={`text-xs font-medium px-2 py-1 rounded border ${isMissed ?
+                                                                    'text-red-700 bg-red-100 border-red-300 font-bold' :
+                                                                    isToday ? 'text-emerald-700 bg-emerald-50 border-emerald-200 font-bold' :
+                                                                        'text-amber-700 bg-amber-50 border-amber-200'
+                                                                    }`}>
+                                                                    📅 {getNextFollowupDate(lead)}
+                                                                    {isMissed && ' (Overdue)'}
+                                                                    {isToday && ' (Today)'}
+                                                                </div>
+                                                            )}
+                                                            {lead.status === 'Not Interested' && (lead.not_interested_main_reason || lead.not_interested_reason) && (
+                                                                <div className="text-[10px] mt-2 p-2 bg-red-50 text-red-700 rounded-lg border border-red-100 flex flex-col shadow-sm">
+                                                                    <span className="font-black flex items-center space-x-1 mb-1 text-red-800">
+                                                                        <XCircle size={10} className="text-red-500" />
+                                                                        <span className="uppercase tracking-wide">{lead.not_interested_main_reason}</span>
+                                                                    </span>
+                                                                    {lead.not_interested_main_reason === 'Other' && lead.not_interested_reason && (
+                                                                        <span className="italic text-red-600 font-medium leading-tight">"{lead.not_interested_reason}"</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-3 sm:py-4">
+                                                        <div className="flex justify-center">
+                                                            {!lead.assigned_to ? (
+                                                                <button
+                                                                    onClick={() => setSelectedLead(lead.id)}
+                                                                    className="bg-blue-600 text-white px-2 sm:px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
+                                                                >
+                                                                    <UserPlus size={12} />
+                                                                    <span className="hidden sm:inline">Assign</span>
+                                                                </button>
+                                                            ) : (
+                                                                <button className="text-gray-300 hover:text-blue-500 transition-colors">
+                                                                    <ExternalLink size={16} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -651,10 +725,27 @@ const AdminDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {followupStatusLeads.map(lead => {
-                                                const hasTodayFollowup = lead.followupHistory.some(f => f.urgency_status === 'today');
+                                            {followupStatusLeads.sort((a, b) => {
+                                                const aMissed = hasMissedFollowup(a);
+                                                const bMissed = hasMissedFollowup(b);
+                                                if (aMissed && !bMissed) return -1;
+                                                if (!aMissed && bMissed) return 1;
+
+                                                const aToday = hasTodayFollowup(a);
+                                                const bToday = hasTodayFollowup(b);
+                                                if (aToday && !bToday) return -1;
+                                                if (!aToday && bToday) return 1;
+
+                                                const aFuture = hasFutureFollowup(a);
+                                                const bFuture = hasFutureFollowup(b);
+                                                if (aFuture && !bFuture) return -1;
+                                                if (!aFuture && bFuture) return 1;
+
+                                                return 0;
+                                            }).map(lead => {
+                                                const hasTodayFollowupItem = lead.followupHistory.some(f => f.urgency_status === 'today');
                                                 return (
-                                                    <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
+                                                    <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all ${hasTodayFollowupItem ? 'bg-emerald-50/30 border-l-4 border-emerald-500' : ''}`}>
                                                         <td className="px-3 sm:px-6 py-3 sm:py-4">
                                                             <div className="flex items-start space-x-2">
                                                                 <div className="flex-1">
@@ -667,7 +758,7 @@ const AdminDashboard = () => {
                                                                         Created: {new Date(lead.lead_created).toLocaleDateString()}
                                                                     </div>
                                                                 </div>
-                                                                {hasTodayFollowup && (
+                                                                {hasTodayFollowupItem && (
                                                                     <div className="flex-shrink-0">
                                                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse">
                                                                             TODAY
@@ -785,6 +876,172 @@ const AdminDashboard = () => {
                                 </div>
                             </div>
                         </div>
+                    ) : activeTab === 'lost' ? (
+                        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                                        <XCircle size={20} />
+                                    </div>
+                                    <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">Lost Opportunities Archive</h2>
+                                </div>
+                                <span className="text-xs font-bold text-gray-400 bg-white px-3 py-1 rounded-full border border-gray-100">
+                                    {leads.filter(l => l.status === 'Not Interested').length} Failed Deals
+                                </span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left min-w-[800px]">
+                                    <thead>
+                                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 bg-gray-50/10">
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Client Information</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Handled By</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Reason for Rejection</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Lost Date</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4 text-center">History</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {leads.filter(l => l.status === 'Not Interested').map(lead => (
+                                            <tr key={lead.id} className="hover:bg-red-50/10 transition-all">
+                                                <td className="px-3 sm:px-6 py-4">
+                                                    <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name || 'Anonymous'}</div>
+                                                    <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
+                                                </td>
+                                                <td className="px-3 sm:px-6 py-4">
+                                                    <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
+                                                        <div className="w-5 h-5 sm:w-6 sm:h-6 bg-red-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
+                                                            {salesmen.find(s => s.id === lead.assigned_to)?.name?.[0] || 'U'}
+                                                        </div>
+                                                        <span className="text-xs font-bold text-gray-700">{salesmen.find(s => s.id === lead.assigned_to)?.name || 'Admin'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 sm:px-6 py-4">
+                                                    <div className="flex flex-col space-y-1">
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-100 rounded text-[10px] font-black uppercase tracking-wider">
+                                                                {lead.not_interested_main_reason || 'Unknown Reason'}
+                                                            </span>
+                                                        </div>
+                                                        {lead.not_interested_reason && (
+                                                            <p className="text-xs text-gray-600 italic font-medium max-w-sm line-clamp-2">
+                                                                "{lead.not_interested_reason}"
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 sm:px-6 py-4">
+                                                    <div className="text-xs font-semibold text-gray-500">
+                                                        {lead.updated_at ? new Date(lead.updated_at).toLocaleDateString() : 'N/A'}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 sm:px-6 py-4 text-center">
+                                                    <button
+                                                        onClick={() => fetchLeadFollowupHistory(lead.id)}
+                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                                        title="View interactions"
+                                                    >
+                                                        <Clock size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {leads.filter(l => l.status === 'Not Interested').length === 0 && (
+                                    <div className="text-center py-20">
+                                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <Target className="text-gray-300" size={32} />
+                                        </div>
+                                        <h3 className="text-xl font-black text-gray-900 mb-2">Clean Slate!</h3>
+                                        <p className="text-gray-500 font-medium">No lost leads found in the archive.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : activeTab === 'won' ? (
+                        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+                                        <CheckCircle size={20} />
+                                    </div>
+                                    <h2 className="text-base sm:text-lg font-black text-gray-900 tracking-tight">Successful Conversions Archive</h2>
+                                </div>
+                                <span className="text-xs font-bold text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">
+                                    {leads.filter(l => l.status === 'Deal Won').length} Deals Won
+                                </span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left min-w-[800px]">
+                                    <thead>
+                                        <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 bg-gray-50/10">
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Client Information</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Handled By</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Booking Details</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4">Revenue</th>
+                                            <th className="px-3 sm:px-6 py-2 sm:py-4 text-center">History</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                        {leads.filter(l => l.status === 'Deal Won').map(lead => {
+                                            // Extract booking details if available
+                                            const booking = lead.booking_details ? (typeof lead.booking_details === 'string' ? JSON.parse(lead.booking_details) : lead.booking_details) : null;
+                                            return (
+                                                <tr key={lead.id} className="hover:bg-emerald-50/10 transition-all">
+                                                    <td className="px-3 sm:px-6 py-4">
+                                                        <div className="font-extrabold text-gray-900 text-sm sm:text-base">{lead.sender_name || 'Anonymous'}</div>
+                                                        <div className="text-gray-400 font-medium text-xs truncate max-w-[200px]">{lead.sender_email}</div>
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-4">
+                                                        <div className="flex items-center space-x-2 bg-gray-50 rounded-xl px-2 py-1 border border-gray-100 w-fit">
+                                                            <div className="w-5 h-5 sm:w-6 sm:h-6 bg-emerald-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black">
+                                                                {salesmen.find(s => s.id === lead.assigned_to)?.name?.[0] || 'U'}
+                                                            </div>
+                                                            <span className="text-xs font-bold text-gray-700">{salesmen.find(s => s.id === lead.assigned_to)?.name || 'Admin'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-4">
+                                                        <div className="flex flex-col space-y-1">
+                                                            <div className="flex items-center space-x-2">
+                                                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded text-[10px] font-black uppercase tracking-wider">
+                                                                    {booking?.project || 'General Booking'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-500 font-bold italic">
+                                                                {booking?.bookingDate ? new Date(booking.bookingDate).toLocaleDateString() : (lead.updated_at ? new Date(lead.updated_at).toLocaleDateString() : 'N/A')}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-4">
+                                                        <div className="font-black text-emerald-600 text-sm sm:text-base">
+                                                            ₹{parseFloat(booking?.amount || 0).toLocaleString()}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 sm:px-6 py-4 text-center">
+                                                        <button
+                                                            onClick={() => fetchLeadFollowupHistory(lead.id)}
+                                                            className="p-2 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
+                                                            title="View interactions"
+                                                        >
+                                                            <Clock size={18} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                                {leads.filter(l => l.status === 'Deal Won').length === 0 && (
+                                    <div className="text-center py-20">
+                                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <TrendingUp className="text-gray-300" size={32} />
+                                        </div>
+                                        <h3 className="text-xl font-black text-gray-900 mb-2">No Won Deals Yet</h3>
+                                        <p className="text-gray-500 font-medium">Keep pushing those leads through the pipeline!</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     ) : (
                         <div className="space-y-6">
                             {/* Performance Overview Cards */}
@@ -858,7 +1115,13 @@ const AdminDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {reports?.salesmanPerf?.map(s => {
+                                            {reports?.salesmanPerf?.sort((a, b) => {
+                                                const aMissed = getMissedLeadsBySalesman(a.id);
+                                                const bMissed = getMissedLeadsBySalesman(b.id);
+                                                if (aMissed > 0 && bMissed === 0) return -1;
+                                                if (aMissed === 0 && bMissed > 0) return 1;
+                                                return 0;
+                                            }).map(s => {
                                                 const total = parseInt(s.total_assigned) || 0;
                                                 const won = parseInt(s.deals_won) || 0;
                                                 const lost = parseInt(s.deals_lost) || 0;
@@ -867,14 +1130,19 @@ const AdminDashboard = () => {
                                                 const missedLeads = getMissedLeadsBySalesman(s.id);
 
                                                 return (
-                                                    <tr key={s.id} className="hover:bg-blue-50/20 transition-all cursor-pointer" onClick={() => navigate(`/salesman-dashboard/${s.id}`)}>
+                                                    <tr key={s.id} className={`hover:bg-blue-50/20 transition-all cursor-pointer ${missedLeads > 0 ? 'bg-red-50/50 border-l-[6px] border-red-600' : ''}`} onClick={() => navigate(`/salesman-dashboard/${s.id}`)}>
                                                         <td className="p-8">
                                                             <div className="flex items-center space-x-4">
                                                                 <div className="w-12 h-12 bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl flex items-center justify-center text-white font-black text-xl">
                                                                     {s.name[0]}
                                                                 </div>
                                                                 <div>
-                                                                    <div className="font-extrabold text-gray-900">{s.name}</div>
+                                                                    <div className="flex items-center space-x-2">
+                                                                        <div className="font-extrabold text-gray-900">{s.name}</div>
+                                                                        {missedLeads > 0 && (
+                                                                            <span className="text-[8px] font-black bg-red-600 text-white px-1.5 py-0.5 rounded animate-pulse">🚨 NEEDS ACTION</span>
+                                                                        )}
+                                                                    </div>
                                                                     <div className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Active Consultant</div>
                                                                 </div>
                                                             </div>
@@ -930,306 +1198,366 @@ const AdminDashboard = () => {
                         </div>
                     )}
                 </div>
-            </div>
+            </div >
 
             {/* Create Salesman Modal */}
-            {showSalesmanModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
-                    <div className="bg-white rounded-2xl sm:rounded-[40px] p-6 sm:p-12 max-w-md w-full shadow-2xl animate-in relative border border-white max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-6 sm:mb-8">
-                            <h2 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight italic">New Consultant</h2>
-                            <button onClick={() => setShowSalesmanModal(false)} className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition">
-                                <XCircle size={24} />
-                            </button>
-                        </div>
-                        <form onSubmit={handleRegisterSalesman} className="space-y-4 sm:space-y-6">
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Full Identity</label>
-                                <input
-                                    type="text" className="w-full p-3 sm:p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl sm:rounded-2xl outline-none transition-all font-bold"
-                                    placeholder="e.g. Victor Sullivan"
-                                    value={newSalesman.name}
-                                    onChange={(e) => setNewSalesman({ ...newSalesman, name: e.target.value })}
-                                    required
-                                />
+            {
+                showSalesmanModal && (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
+                        <div className="bg-white rounded-2xl sm:rounded-[40px] p-6 sm:p-12 max-w-md w-full shadow-2xl animate-in relative border border-white max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6 sm:mb-8">
+                                <h2 className="text-xl sm:text-3xl font-black text-gray-900 tracking-tight italic">New Consultant</h2>
+                                <button onClick={() => setShowSalesmanModal(false)} className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition">
+                                    <XCircle size={24} />
+                                </button>
                             </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Corporate Email</label>
-                                <input
-                                    type="email" className="w-full p-3 sm:p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl sm:rounded-2xl outline-none transition-all font-bold"
-                                    placeholder="sales.pro@company.com"
-                                    value={newSalesman.email}
-                                    onChange={(e) => setNewSalesman({ ...newSalesman, email: e.target.value })}
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Access Credential</label>
-                                <input
-                                    type="password" className="w-full p-3 sm:p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl sm:rounded-2xl outline-none transition-all font-bold"
-                                    placeholder="Minimum 8 characters"
-                                    value={newSalesman.password}
-                                    onChange={(e) => setNewSalesman({ ...newSalesman, password: e.target.value })}
-                                    required
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                className="w-full py-3 sm:py-5 bg-gray-900 text-white rounded-xl sm:rounded-[24px] font-black text-sm sm:text-lg hover:bg-black transition-all shadow-2xl shadow-gray-400 mt-4 sm:mt-6 active:scale-95"
-                            >
-                                Activate Profile
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Assignment Modal */}
-            {selectedLead && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
-                    <div className="bg-white rounded-2xl sm:rounded-[40px] p-6 sm:p-12 max-w-md w-full shadow-2xl animate-in border border-white max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-6 sm:mb-8 text-center w-full">
-                            <div className="w-full">
-                                <h2 className="text-xl sm:text-3xl font-black text-gray-900 italic">Delegate Lead</h2>
-                                <p className="text-gray-400 text-sm font-medium mt-1">Select the best closer for this deal</p>
-                            </div>
-                        </div>
-                        <form onSubmit={handleAssign}>
-                            <div className="mb-6 sm:mb-10">
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Available Team Members</label>
-                                <div className="grid grid-cols-1 gap-3 max-h-48 sm:max-h-60 overflow-y-auto px-1 custom-scrollbar">
-                                    {salesmen.map(s => (
-                                        <div key={s.id} className="relative">
-                                            <input
-                                                type="radio" name="salesman" id={`s-${s.id}`} className="peer hidden"
-                                                value={s.id} onChange={(e) => setSelectedSalesman(e.target.value)} required
-                                            />
-                                            <label
-                                                htmlFor={`s-${s.id}`}
-                                                className="flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 border-2 border-gray-100 rounded-xl sm:rounded-2xl cursor-pointer hover:bg-gray-50 transition-all peer-checked:border-blue-600 peer-checked:bg-blue-50"
-                                            >
-                                                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-900 text-white rounded-lg sm:rounded-xl flex items-center justify-center font-black text-sm sm:text-base">{s.name[0]}</div>
-                                                <span className="font-extrabold text-gray-800 text-sm sm:text-base">{s.name}</span>
-                                            </label>
-                                        </div>
-                                    ))}
+                            <form onSubmit={handleRegisterSalesman} className="space-y-4 sm:space-y-6">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Full Identity</label>
+                                    <input
+                                        type="text" className="w-full p-3 sm:p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl sm:rounded-2xl outline-none transition-all font-bold"
+                                        placeholder="e.g. Victor Sullivan"
+                                        value={newSalesman.name}
+                                        onChange={(e) => setNewSalesman({ ...newSalesman, name: e.target.value })}
+                                        required
+                                    />
                                 </div>
-                            </div>
-                            <div className="flex flex-col space-y-3 sm:space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Corporate Email</label>
+                                    <input
+                                        type="email" className="w-full p-3 sm:p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl sm:rounded-2xl outline-none transition-all font-bold"
+                                        placeholder="sales.pro@company.com"
+                                        value={newSalesman.email}
+                                        onChange={(e) => setNewSalesman({ ...newSalesman, email: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Access Credential</label>
+                                    <input
+                                        type="password" className="w-full p-3 sm:p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-xl sm:rounded-2xl outline-none transition-all font-bold"
+                                        placeholder="Minimum 8 characters"
+                                        value={newSalesman.password}
+                                        onChange={(e) => setNewSalesman({ ...newSalesman, password: e.target.value })}
+                                        required
+                                    />
+                                </div>
                                 <button
                                     type="submit"
-                                    className="w-full py-3 sm:py-5 bg-blue-600 text-white rounded-xl sm:rounded-[24px] font-black text-sm sm:text-lg hover:bg-blue-700 transition shadow-xl shadow-blue-100 active:scale-95"
+                                    className="w-full py-3 sm:py-5 bg-gray-900 text-white rounded-xl sm:rounded-[24px] font-black text-sm sm:text-lg hover:bg-black transition-all shadow-2xl shadow-gray-400 mt-4 sm:mt-6 active:scale-95"
                                 >
-                                    Confirm Delegation
+                                    Activate Profile
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedLead(null)}
-                                    className="w-full py-3 sm:py-4 text-gray-400 font-bold hover:text-gray-900 transition-colors"
-                                >
-                                    Dismiss
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {/* Assignment Modal */}
+            {
+                selectedLead && (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
+                        <div className="bg-white rounded-2xl sm:rounded-[40px] p-6 sm:p-12 max-w-md w-full shadow-2xl animate-in border border-white max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6 sm:mb-8 text-center w-full">
+                                <div className="w-full">
+                                    <h2 className="text-xl sm:text-3xl font-black text-gray-900 italic">Delegate Lead</h2>
+                                    <p className="text-gray-400 text-sm font-medium mt-1">Select the best closer for this deal</p>
+                                </div>
+                            </div>
+                            <form onSubmit={handleAssign}>
+                                <div className="mb-6 sm:mb-10">
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 text-center">Available Team Members</label>
+                                    <div className="grid grid-cols-1 gap-3 max-h-48 sm:max-h-60 overflow-y-auto px-1 custom-scrollbar">
+                                        {salesmen.map(s => (
+                                            <div key={s.id} className="relative">
+                                                <input
+                                                    type="radio" name="salesman" id={`s-${s.id}`} className="peer hidden"
+                                                    value={s.id} onChange={(e) => setSelectedSalesman(e.target.value)} required
+                                                />
+                                                <label
+                                                    htmlFor={`s-${s.id}`}
+                                                    className="flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 border-2 border-gray-100 rounded-xl sm:rounded-2xl cursor-pointer hover:bg-gray-50 transition-all peer-checked:border-blue-600 peer-checked:bg-blue-50"
+                                                >
+                                                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-900 text-white rounded-lg sm:rounded-xl flex items-center justify-center font-black text-sm sm:text-base">{s.name[0]}</div>
+                                                    <span className="font-extrabold text-gray-800 text-sm sm:text-base">{s.name}</span>
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex flex-col space-y-3 sm:space-y-4">
+                                    <button
+                                        type="submit"
+                                        className="w-full py-3 sm:py-5 bg-blue-600 text-white rounded-xl sm:rounded-[24px] font-black text-sm sm:text-lg hover:bg-blue-700 transition shadow-xl shadow-blue-100 active:scale-95"
+                                    >
+                                        Confirm Delegation
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedLead(null)}
+                                        className="w-full py-3 sm:py-4 text-gray-400 font-bold hover:text-gray-900 transition-colors"
+                                    >
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Follow-up History Modal */}
-            {showFollowupHistoryModal && selectedLeadHistory && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
-                    <div className="bg-white rounded-2xl sm:rounded-[40px] p-4 sm:p-8 max-w-4xl w-full shadow-2xl animate-in border border-white max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-6 sm:mb-8">
-                            <div className="min-w-0 flex-1">
-                                <h2 className="text-xl sm:text-3xl font-black text-gray-900 italic">Follow-up History</h2>
-                                <p className="text-gray-400 text-sm font-medium mt-1 truncate">
-                                    {selectedLeadHistory.leadDetails?.sender_name} - {selectedLeadHistory.leadDetails?.sender_email}
-                                </p>
+            {
+                showFollowupHistoryModal && selectedLeadHistory && (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
+                        <div className="bg-white rounded-2xl sm:rounded-[40px] p-4 sm:p-8 max-w-4xl w-full shadow-2xl animate-in border border-white max-h-[90vh] overflow-y-auto">
+                            <div className="flex justify-between items-center mb-6 sm:mb-8">
+                                <div className="min-w-0 flex-1">
+                                    <h2 className="text-xl sm:text-3xl font-black text-gray-900 italic">Follow-up History</h2>
+                                    <p className="text-gray-400 text-sm font-medium mt-1 truncate">
+                                        {selectedLeadHistory.leadDetails?.sender_name} - {selectedLeadHistory.leadDetails?.sender_email}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setShowFollowupHistoryModal(false)}
+                                    className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition flex-shrink-0"
+                                >
+                                    <XCircle size={24} />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setShowFollowupHistoryModal(false)}
-                                className="text-gray-400 hover:text-gray-900 p-2 rounded-xl hover:bg-gray-100 transition flex-shrink-0"
-                            >
-                                <XCircle size={24} />
-                            </button>
-                        </div>
 
-                        {/* Lead Summary */}
-                        <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-6">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Lead Subject</span>
-                                    <p className="font-bold text-gray-900 mt-1 text-sm sm:text-base truncate">{selectedLeadHistory.leadDetails?.subject || 'No subject'}</p>
-                                </div>
-                                <div>
-                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Assigned To</span>
-                                    <p className="font-bold text-gray-900 mt-1 text-sm sm:text-base truncate">{selectedLeadHistory.leadDetails?.assigned_salesman || 'Unassigned'}</p>
-                                </div>
-                                <div>
-                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Follow-ups</span>
-                                    <p className="font-bold text-gray-900 mt-1 text-sm sm:text-base">{selectedLeadHistory.followupHistory?.length || 0}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Follow-up Timeline */}
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-black text-gray-900">Follow-up Timeline</h3>
-
-                            {selectedLeadHistory.followupHistory && selectedLeadHistory.followupHistory.length > 0 ? (
-                                <div className="relative">
-                                    <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-100"></div>
-
-                                    <div className="space-y-6">
-                                        {selectedLeadHistory.followupHistory
-                                            .sort((a, b) => new Date(b.followup_date) - new Date(a.followup_date))
-                                            .map((followup, index) => (
-                                                <div key={followup.id} className="relative flex items-start space-x-4">
-                                                    <div className="relative z-10 w-16 h-16 bg-white rounded-full flex items-center justify-center border-4 border-white shadow-sm">
-                                                        <div className={`p-3 rounded-full ${followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
-                                                            followup.status === 'Pending' ? 'bg-amber-100 text-amber-600 border-amber-200' :
-                                                                followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
-                                                                    'bg-gray-100 text-gray-600 border-gray-200'
-                                                            }`}>
-                                                            {followup.status === 'Completed' ? <CheckCircle size={20} /> :
-                                                                followup.status === 'Pending' ? <Clock size={20} /> :
-                                                                    followup.status === 'Missed' ? <XCircle size={20} /> :
-                                                                        <Target size={20} />}
-                                                        </div>
+                            {/* Lead Summary */}
+                            <div className="bg-gray-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Lead Subject</span>
+                                        <p className="font-bold text-gray-900 mt-1 text-sm sm:text-base truncate">{selectedLeadHistory.leadDetails?.subject || 'No subject'}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Assigned To</span>
+                                        <p className="font-bold text-gray-900 mt-1 text-sm sm:text-base truncate">{selectedLeadHistory.leadDetails?.assigned_salesman || 'Unassigned'}</p>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Follow-ups</span>
+                                        <p className="font-bold text-gray-900 mt-1 text-sm sm:text-base">{selectedLeadHistory.followupHistory?.length || 0}</p>
+                                    </div>
+                                    {selectedLeadHistory.leadDetails?.status === 'Deal Won' && (
+                                        <div className="col-span-full mt-4 p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex flex-col shadow-inner">
+                                            <div className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-2 flex items-center space-x-1.5">
+                                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                                <span>Outcome: Success / Deal Won</span>
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div className="flex items-center space-x-4">
+                                                    <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-200">
+                                                        <CheckCircle size={24} />
                                                     </div>
-                                                    <div className={`flex-1 rounded-2xl p-4 border ${followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
-                                                        followup.status === 'Pending' ? 'bg-amber-50 border-amber-100' :
-                                                            followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
-                                                                'bg-gray-50 border-gray-100'
-                                                        }`}>
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <span className={`text-xs font-black uppercase tracking-widest ${followup.status === 'Completed' ? 'text-emerald-600' :
-                                                                followup.status === 'Pending' ? 'text-amber-600' :
-                                                                    followup.status === 'Missed' ? 'text-red-600' :
-                                                                        'text-gray-600'
-                                                                }`}>
-                                                                {followup.status}
-                                                            </span>
-                                                            <span className="text-xs text-gray-400">
-                                                                {new Date(followup.followup_date).toLocaleDateString()}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className="mb-2">
-                                                            <span className="text-xs font-medium text-gray-500">Salesman:</span>
-                                                            <span className="text-xs text-gray-700 ml-2">{followup.salesman_name}</span>
-                                                        </div>
-
-                                                        {followup.remarks && (
-                                                            <div className="mb-2">
-                                                                <span className="text-xs font-medium text-gray-500">Remarks:</span>
-                                                                <p className="text-sm text-gray-700 mt-1">{followup.remarks}</p>
-                                                            </div>
-                                                        )}
-
-                                                        {followup.completion_date && (
-                                                            <div className="mb-2">
-                                                                <span className="text-xs font-medium text-gray-500">Completed on:</span>
-                                                                <span className="text-xs text-gray-700 ml-2">
-                                                                    {new Date(followup.completion_date).toLocaleDateString()} at {new Date(followup.completion_date).toLocaleTimeString()}
-                                                                </span>
-                                                            </div>
-                                                        )}
-
-                                                        {followup.completion_notes && (
-                                                            <div>
-                                                                <span className="text-xs font-medium text-gray-500">Completion Notes:</span>
-                                                                <p className="text-sm text-gray-700 mt-1">{followup.completion_notes}</p>
-                                                            </div>
-                                                        )}
+                                                    <div>
+                                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest block">Project Closed</span>
+                                                        <h4 className="font-black text-emerald-900 text-lg sm:text-xl">
+                                                            {selectedLeadHistory.leadDetails?.booking_details?.project || 'General Booking'}
+                                                        </h4>
                                                     </div>
                                                 </div>
-                                            ))}
-                                    </div>
+                                                <div className="flex flex-col sm:items-end bg-white/60 p-3 rounded-xl border border-emerald-50">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Contract Value</span>
+                                                    <div className="flex items-baseline space-x-1">
+                                                        <span className="text-xl sm:text-2xl font-black text-emerald-600">
+                                                            ₹{parseFloat(selectedLeadHistory.leadDetails?.booking_details?.amount || 0).toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-gray-500 italic mt-1">
+                                                        Closed on {selectedLeadHistory.leadDetails?.booking_details?.bookingDate ? new Date(selectedLeadHistory.leadDetails.booking_details.bookingDate).toLocaleDateString() : 'N/A'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {selectedLeadHistory.leadDetails?.status === 'Not Interested' && (
+                                        <div className="col-span-full mt-4 p-4 bg-red-50/50 rounded-xl border border-red-100 flex flex-col shadow-inner">
+                                            <div className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] mb-2 flex items-center space-x-1.5">
+                                                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse"></span>
+                                                <span>Outcome: Not Interested</span>
+                                            </div>
+                                            <div className="flex items-center space-x-3">
+                                                <div className="p-2 bg-red-500 text-white rounded-lg">
+                                                    <XCircle size={18} />
+                                                </div>
+                                                <span className="font-black text-red-900 text-base sm:text-lg">{selectedLeadHistory.leadDetails?.not_interested_main_reason || 'No specific reason'}</span>
+                                            </div>
+                                            {selectedLeadHistory.leadDetails?.not_interested_main_reason === 'Other' && selectedLeadHistory.leadDetails?.not_interested_reason && (
+                                                <div className="mt-3 p-4 bg-white/80 rounded-xl border border-red-50 text-red-700 italic text-sm leading-relaxed relative ml-11">
+                                                    <div className="absolute top-0 left-[-4px] w-1 h-full bg-red-400 rounded-l-xl"></div>
+                                                    "{selectedLeadHistory.leadDetails?.not_interested_reason}"
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            ) : (
-                                <div className="text-center py-12">
-                                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Clock className="text-gray-400" size={24} />
+                            </div>
+
+                            {/* Follow-up Timeline */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-black text-gray-900">Follow-up Timeline</h3>
+
+                                {selectedLeadHistory.followupHistory && selectedLeadHistory.followupHistory.length > 0 ? (
+                                    <div className="relative">
+                                        <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-100"></div>
+
+                                        <div className="space-y-6">
+                                            {selectedLeadHistory.followupHistory
+                                                .sort((a, b) => new Date(b.followup_date) - new Date(a.followup_date))
+                                                .map((followup, index) => (
+                                                    <div key={followup.id} className="relative flex items-start space-x-4">
+                                                        <div className="relative z-10 w-16 h-16 bg-white rounded-full flex items-center justify-center border-4 border-white shadow-sm">
+                                                            <div className={`p-3 rounded-full ${followup.status === 'Completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200' :
+                                                                followup.status === 'Pending' ? 'bg-amber-100 text-amber-600 border-amber-200' :
+                                                                    followup.status === 'Missed' ? 'bg-red-100 text-red-600 border-red-200' :
+                                                                        'bg-gray-100 text-gray-600 border-gray-200'
+                                                                }`}>
+                                                                {followup.status === 'Completed' ? <CheckCircle size={20} /> :
+                                                                    followup.status === 'Pending' ? <Clock size={20} /> :
+                                                                        followup.status === 'Missed' ? <XCircle size={20} /> :
+                                                                            <Target size={20} />}
+                                                            </div>
+                                                        </div>
+                                                        <div className={`flex-1 rounded-2xl p-4 border ${followup.status === 'Completed' ? 'bg-emerald-50 border-emerald-100' :
+                                                            followup.status === 'Pending' ? 'bg-amber-50 border-amber-100' :
+                                                                followup.status === 'Missed' ? 'bg-red-50 border-red-100' :
+                                                                    'bg-gray-50 border-gray-100'
+                                                            }`}>
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <span className={`text-xs font-black uppercase tracking-widest ${followup.status === 'Completed' ? 'text-emerald-600' :
+                                                                    followup.status === 'Pending' ? 'text-amber-600' :
+                                                                        followup.status === 'Missed' ? 'text-red-600' :
+                                                                            'text-gray-600'
+                                                                    }`}>
+                                                                    {followup.status}
+                                                                </span>
+                                                                <span className="text-xs text-gray-400">
+                                                                    {new Date(followup.followup_date).toLocaleDateString()}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="mb-2">
+                                                                <span className="text-xs font-medium text-gray-500">Salesman:</span>
+                                                                <span className="text-xs text-gray-700 ml-2">{followup.salesman_name}</span>
+                                                            </div>
+
+                                                            {followup.remarks && (
+                                                                <div className="mb-2">
+                                                                    <span className="text-xs font-medium text-gray-500">Remarks:</span>
+                                                                    <p className="text-sm text-gray-700 mt-1">{followup.remarks}</p>
+                                                                </div>
+                                                            )}
+
+                                                            {followup.completion_date && (
+                                                                <div className="mb-2">
+                                                                    <span className="text-xs font-medium text-gray-500">Completed on:</span>
+                                                                    <span className="text-xs text-gray-700 ml-2">
+                                                                        {new Date(followup.completion_date).toLocaleDateString()} at {new Date(followup.completion_date).toLocaleTimeString()}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+
+                                                            {followup.completion_notes && (
+                                                                <div>
+                                                                    <span className="text-xs font-medium text-gray-500">Completion Notes:</span>
+                                                                    <p className="text-sm text-gray-700 mt-1">{followup.completion_notes}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">No Follow-up History</h3>
-                                    <p className="text-sm text-gray-500">No follow-up activities recorded for this lead yet</p>
+                                ) : (
+                                    <div className="text-center py-12">
+                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Clock className="text-gray-400" size={24} />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-gray-900 mb-2">No Follow-up History</h3>
+                                        <p className="text-sm text-gray-500">No follow-up activities recorded for this lead yet</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Summary Stats */}
+                            {selectedLeadHistory.summary && (
+                                <div className="mt-6 bg-blue-50 rounded-2xl p-4">
+                                    <h4 className="text-sm font-black text-blue-900 mb-3">Summary</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                        <div>
+                                            <span className="text-gray-500">Total:</span>
+                                            <span className="font-bold text-gray-900 ml-2">{selectedLeadHistory.summary.totalFollowups}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500">Pending:</span>
+                                            <span className="font-bold text-amber-600 ml-2">{selectedLeadHistory.summary.pendingFollowups}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500">Completed:</span>
+                                            <span className="font-bold text-emerald-600 ml-2">{selectedLeadHistory.summary.completedFollowups}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-gray-500">Missed:</span>
+                                            <span className="font-bold text-red-600 ml-2">{selectedLeadHistory.summary.missedFollowups}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
-
-                        {/* Summary Stats */}
-                        {selectedLeadHistory.summary && (
-                            <div className="mt-6 bg-blue-50 rounded-2xl p-4">
-                                <h4 className="text-sm font-black text-blue-900 mb-3">Summary</h4>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                                    <div>
-                                        <span className="text-gray-500">Total:</span>
-                                        <span className="font-bold text-gray-900 ml-2">{selectedLeadHistory.summary.totalFollowups}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-gray-500">Pending:</span>
-                                        <span className="font-bold text-amber-600 ml-2">{selectedLeadHistory.summary.pendingFollowups}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-gray-500">Completed:</span>
-                                        <span className="font-bold text-emerald-600 ml-2">{selectedLeadHistory.summary.completedFollowups}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-gray-500">Missed:</span>
-                                        <span className="font-bold text-red-600 ml-2">{selectedLeadHistory.summary.missedFollowups}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Message Detail Modal */}
-            {viewMessage && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[120] backdrop-blur-lg">
-                    <div className="bg-white rounded-2xl sm:rounded-[40px] p-4 sm:p-10 max-w-3xl w-full shadow-2xl animate-in max-h-[85vh] overflow-hidden border border-gray-100 flex flex-col">
-                        <div className="flex justify-between items-center mb-4 sm:mb-6">
-                            <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
-                                <div className="p-2 sm:p-3 bg-blue-50 text-blue-600 rounded-xl sm:rounded-2xl flex-shrink-0">
-                                    <MessageSquare size={20} />
+            {
+                viewMessage && (
+                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[120] backdrop-blur-lg">
+                        <div className="bg-white rounded-2xl sm:rounded-[40px] p-4 sm:p-10 max-w-3xl w-full shadow-2xl animate-in max-h-[85vh] overflow-hidden border border-gray-100 flex flex-col">
+                            <div className="flex justify-between items-center mb-4 sm:mb-6">
+                                <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
+                                    <div className="p-2 sm:p-3 bg-blue-50 text-blue-600 rounded-xl sm:rounded-2xl flex-shrink-0">
+                                        <MessageSquare size={20} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-lg sm:text-2xl font-black text-gray-900 leading-tight truncate">Client Requirement</h3>
+                                        <p className="text-gray-500 font-medium text-sm truncate">From: <span className="text-blue-600 font-bold">{viewMessage.sender_name}</span></p>
+                                    </div>
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-lg sm:text-2xl font-black text-gray-900 leading-tight truncate">Client Requirement</h3>
-                                    <p className="text-gray-500 font-medium text-sm truncate">From: <span className="text-blue-600 font-bold">{viewMessage.sender_name}</span></p>
-                                </div>
+                                <button onClick={() => setViewMessage(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-2 sm:p-3 rounded-xl sm:rounded-2xl transition hover:rotate-90 flex-shrink-0">
+                                    <XCircle size={20} />
+                                </button>
                             </div>
-                            <button onClick={() => setViewMessage(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-2 sm:p-3 rounded-xl sm:rounded-2xl transition hover:rotate-90 flex-shrink-0">
-                                <XCircle size={20} />
-                            </button>
-                        </div>
 
-                        <div className="bg-gray-50/50 rounded-2xl sm:rounded-3xl p-4 sm:p-8 overflow-y-auto custom-scrollbar flex-1 border border-gray-100">
-                            <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-100">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-2">Subject Line</span>
-                                <h4 className="text-base sm:text-lg font-bold text-gray-900">{viewMessage.subject}</h4>
-                            </div>
-                            <div>
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">Message Body</span>
-                                <div className="text-gray-700 leading-relaxed font-medium whitespace-pre-line text-sm sm:text-lg">
-                                    {viewMessage.body}
+                            <div className="bg-gray-50/50 rounded-2xl sm:rounded-3xl p-4 sm:p-8 overflow-y-auto custom-scrollbar flex-1 border border-gray-100">
+                                <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-100">
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-2">Subject Line</span>
+                                    <h4 className="text-base sm:text-lg font-bold text-gray-900">{viewMessage.subject}</h4>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] block mb-4">Message Body</span>
+                                    <div className="text-gray-700 leading-relaxed font-medium whitespace-pre-line text-sm sm:text-lg">
+                                        {viewMessage.body}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="mt-4 sm:mt-8 flex space-x-3 sm:space-x-4">
-                            <button
-                                onClick={() => setViewMessage(null)}
-                                className="px-6 sm:px-8 py-3 sm:py-4 bg-gray-100 text-gray-500 rounded-xl sm:rounded-2xl font-black text-sm sm:text-lg hover:bg-gray-200 transition"
-                            >
-                                Close
-                            </button>
+                            <div className="mt-4 sm:mt-8 flex space-x-3 sm:space-x-4">
+                                <button
+                                    onClick={() => setViewMessage(null)}
+                                    className="px-6 sm:px-8 py-3 sm:py-4 bg-gray-100 text-gray-500 rounded-xl sm:rounded-2xl font-black text-sm sm:text-lg hover:bg-gray-200 transition"
+                                >
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

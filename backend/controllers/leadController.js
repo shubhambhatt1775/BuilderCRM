@@ -3,7 +3,20 @@ const whatsappService = require('../services/whatsappService');
 
 exports.getAllLeads = async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM leads ORDER BY created_at DESC');
+        const [rows] = await pool.query(`
+            SELECT l.*, 
+            CASE 
+                WHEN b.id IS NOT NULL THEN JSON_OBJECT(
+                    'amount', b.amount,
+                    'project', b.project,
+                    'bookingDate', b.booking_date
+                )
+                ELSE NULL 
+            END as booking_details
+            FROM leads l
+            LEFT JOIN bookings b ON l.id = b.lead_id
+            ORDER BY l.created_at DESC
+        `);
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -22,7 +35,21 @@ exports.assignLead = async (req, res) => {
 
 exports.getSalesmanLeads = async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM leads WHERE assigned_to = ? ORDER BY created_at DESC', [req.user.id]);
+        const [rows] = await pool.query(`
+            SELECT l.*, 
+            CASE 
+                WHEN b.id IS NOT NULL THEN JSON_OBJECT(
+                    'amount', b.amount,
+                    'project', b.project,
+                    'bookingDate', b.booking_date
+                )
+                ELSE NULL 
+            END as booking_details
+            FROM leads l
+            LEFT JOIN bookings b ON l.id = b.lead_id
+            WHERE l.assigned_to = ? 
+            ORDER BY l.created_at DESC
+        `, [req.user.id]);
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -30,7 +57,7 @@ exports.getSalesmanLeads = async (req, res) => {
 };
 
 exports.updateLeadStatus = async (req, res) => {
-    const { leadId, status, remarks, followupDate, bookingDetails } = req.body;
+    const { leadId, status, remarks, followupDate, bookingDetails, notInterestedMainReason, notInterestedReason } = req.body;
     const salesmanId = req.user.id;
 
     const connection = await pool.getConnection();
@@ -38,10 +65,15 @@ exports.updateLeadStatus = async (req, res) => {
         await connection.beginTransaction();
 
         // 1. Update lead status
-        await connection.query('UPDATE leads SET status = ? WHERE id = ?', [status, leadId]);
+        if (status === 'Not Interested') {
+            await connection.query('UPDATE leads SET status = ?, not_interested_main_reason = ?, not_interested_reason = ? WHERE id = ?',
+                [status, notInterestedMainReason || null, notInterestedReason || null, leadId]);
+        } else {
+            await connection.query('UPDATE leads SET status = ?, not_interested_main_reason = NULL, not_interested_reason = NULL WHERE id = ?', [status, leadId]);
+        }
 
-        // 2. Mark all previous pending followups for this lead as 'Completed'
-        await connection.query('UPDATE followups SET status = ? WHERE lead_id = ? AND status = ?', ['Completed', leadId, 'Pending']);
+        // 2. Mark all previous pending or missed followups for this lead as 'Completed'
+        await connection.query('UPDATE followups SET status = ? WHERE lead_id = ? AND (status = ? OR status = ?)', ['Completed', leadId, 'Pending', 'Missed']);
 
         // 3. Handle specific status cases
         if (status === 'Follow-up') {
@@ -136,12 +168,21 @@ exports.getLeadFollowupHistory = async (req, res) => {
                 l.*,
                 u.name as assigned_salesman,
                 u.email as salesman_email,
-                u.role as salesman_role
+                u.role as salesman_role,
+                CASE 
+                    WHEN b.id IS NOT NULL THEN JSON_OBJECT(
+                        'amount', b.amount,
+                        'project', b.project,
+                        'bookingDate', b.booking_date
+                    )
+                    ELSE NULL 
+                END as booking_details
             FROM leads l
             LEFT JOIN users u ON l.assigned_to = u.id
+            LEFT JOIN bookings b ON l.id = b.lead_id
             WHERE l.id = ?
         `, [leadId]);
-        
+
         // Get follow-up history
         const [followupHistory] = await pool.query(`
             SELECT 
@@ -160,7 +201,7 @@ exports.getLeadFollowupHistory = async (req, res) => {
             WHERE f.lead_id = ?
             ORDER BY f.followup_date ASC, f.created_at ASC
         `, [leadId]);
-        
+
         // Calculate summary
         const summary = {
             totalFollowups: followupHistory.length,
@@ -168,7 +209,7 @@ exports.getLeadFollowupHistory = async (req, res) => {
             completedFollowups: followupHistory.filter(f => f.status === 'Completed').length,
             missedFollowups: followupHistory.filter(f => f.status === 'Missed').length
         };
-        
+
         res.json({
             leadDetails: leadDetails[0] || null,
             followupHistory,
@@ -202,7 +243,7 @@ exports.getSalesmanFollowupHistory = async (req, res) => {
             WHERE f.salesman_id = ?
             ORDER BY f.followup_date DESC, f.created_at DESC
         `, [req.user.id]);
-        
+
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -213,9 +254,9 @@ exports.getSalesmanFollowupHistory = async (req, res) => {
 exports.getSalesmanKPIById = async (req, res) => {
     try {
         const { salesmanId } = req.params;
-        
+
         console.log('🔍 ADMIN KPI REQUEST - Salesman ID:', salesmanId);
-        
+
         // Get ALL leads for this salesman with detailed info
         const [allLeads] = await pool.query(`
             SELECT id, sender_name, status, assigned_to, created_at
@@ -223,9 +264,9 @@ exports.getSalesmanKPIById = async (req, res) => {
             WHERE assigned_to = ?
             ORDER BY created_at DESC
         `, [salesmanId]);
-        
+
         console.log('🔍 ADMIN KPI - Found leads:', allLeads.length);
-        
+
         // Count by status manually to be sure
         const statusCounts = {
             'New': 0,
@@ -237,31 +278,31 @@ exports.getSalesmanKPIById = async (req, res) => {
             'Won': 0,
             'DEAL WON': 0
         };
-        
+
         allLeads.forEach(lead => {
             if (statusCounts.hasOwnProperty(lead.status)) {
                 statusCounts[lead.status]++;
             }
         });
-        
+
         // Calculate total and won deals
         const totalAssigned = allLeads.length;
         const wonDeals = statusCounts['Deal Won'] + statusCounts['WON'] + statusCounts['Won'] + statusCounts['DEAL WON'];
-        
+
         console.log('🔍 ADMIN KPI - Total:', totalAssigned, 'Won:', wonDeals);
-        
+
         // NEW APPROACH: Check each lead's latest follow-up date
         let missedCount = 0;
         const today = new Date().toISOString().split('T')[0];
-        
+
         // Check each lead individually
         for (const lead of allLeads) {
             // Skip leads that are already won or not interested
-            if (lead.status === 'Deal Won' || lead.status === 'Not Interested' || 
+            if (lead.status === 'Deal Won' || lead.status === 'Not Interested' ||
                 lead.status === 'Won' || lead.status === 'WON' || lead.status === 'DEAL WON') {
                 continue;
             }
-            
+
             // Get the latest follow-up for this lead
             const [latestFollowup] = await pool.query(`
                 SELECT followup_date, status
@@ -270,34 +311,34 @@ exports.getSalesmanKPIById = async (req, res) => {
                 ORDER BY followup_date DESC 
                 LIMIT 1
             `, [lead.id]);
-            
+
             if (latestFollowup.length > 0) {
                 const followup = latestFollowup[0];
                 const followupDate = new Date(followup.followup_date).toISOString().split('T')[0];
-                
-                // Check if follow-up date is past (overdue)
-                if (followupDate < today) {
+
+                // Check if follow-up date is past (overdue) AND not completed
+                if (followupDate < today && (followup.status === 'Pending' || followup.status === 'Missed')) {
                     missedCount++;
                 }
             }
         }
-        
+
         const totalRealMissedCount = missedCount;
-        
+
         console.log('🔍 ADMIN KPI - Missed:', totalRealMissedCount);
-        
+
         // Calculate success rate
         const successRate = totalAssigned > 0 ? ((wonDeals / totalAssigned) * 100).toFixed(1) : '0.0';
-        
+
         const result = {
             total: totalAssigned,
             won: wonDeals,
             missed: totalRealMissedCount,
             successRate: parseFloat(successRate)
         };
-        
+
         console.log('🔍 ADMIN KPI - FINAL RESULT:', result);
-        
+
         res.json(result);
     } catch (err) {
         console.error('❌ ADMIN KPI CALCULATION ERROR:', err);
@@ -309,16 +350,16 @@ exports.getSalesmanKPIById = async (req, res) => {
 exports.getAllSalesmenMissedCount = async (req, res) => {
     try {
         console.log('🔍 GETTING TOTAL MISSED LEADS FOR ALL SALESMEN');
-        
+
         const today = new Date().toISOString().split('T')[0];
-        
+
         // Get all salesmen
         const [salesmen] = await pool.query(`
             SELECT id, name, email FROM users WHERE role = 'salesman'
         `);
-        
+
         let totalMissedCount = 0;
-        
+
         // Check each salesman's leads
         for (const salesman of salesmen) {
             // Get all leads for this salesman
@@ -328,15 +369,15 @@ exports.getAllSalesmenMissedCount = async (req, res) => {
                 WHERE assigned_to = ?
                 ORDER BY created_at DESC
             `, [salesman.id]);
-            
+
             // Check each lead individually
             for (const lead of leads) {
                 // Skip leads that are already won or not interested
-                if (lead.status === 'Deal Won' || lead.status === 'Not Interested' || 
+                if (lead.status === 'Deal Won' || lead.status === 'Not Interested' ||
                     lead.status === 'Won' || lead.status === 'WON' || lead.status === 'DEAL WON') {
                     continue;
                 }
-                
+
                 // Get the latest follow-up for this lead
                 const [latestFollowup] = await pool.query(`
                     SELECT followup_date, status
@@ -345,21 +386,21 @@ exports.getAllSalesmenMissedCount = async (req, res) => {
                     ORDER BY followup_date DESC 
                     LIMIT 1
                 `, [lead.id]);
-                
+
                 if (latestFollowup.length > 0) {
                     const followup = latestFollowup[0];
                     const followupDate = new Date(followup.followup_date).toISOString().split('T')[0];
-                    
-                    // Check if follow-up date is past (overdue)
-                    if (followupDate < today) {
+
+                    // Check if follow-up date is past (overdue) AND not completed
+                    if (followupDate < today && (followup.status === 'Pending' || followup.status === 'Missed')) {
                         totalMissedCount++;
                     }
                 }
             }
         }
-        
+
         console.log('🔍 TOTAL MISSED LEADS ACROSS ALL SALESMEN:', totalMissedCount);
-        
+
         res.json({
             totalMissed: totalMissedCount
         });
@@ -373,7 +414,7 @@ exports.getAllSalesmenMissedCount = async (req, res) => {
 exports.getSalesmanKPI = async (req, res) => {
     try {
         const salesmanId = req.user.id;
-        
+
         // Get ALL leads for this salesman with detailed info
         const [allLeads] = await pool.query(`
             SELECT id, sender_name, status, assigned_to, created_at
@@ -381,7 +422,7 @@ exports.getSalesmanKPI = async (req, res) => {
             WHERE assigned_to = ?
             ORDER BY created_at DESC
         `, [salesmanId]);
-        
+
         // Count by status manually to be sure
         const statusCounts = {
             'New': 0,
@@ -393,29 +434,29 @@ exports.getSalesmanKPI = async (req, res) => {
             'Won': 0,
             'DEAL WON': 0
         };
-        
+
         allLeads.forEach(lead => {
             if (statusCounts.hasOwnProperty(lead.status)) {
                 statusCounts[lead.status]++;
             }
         });
-        
+
         // Calculate total and won deals
         const totalAssigned = allLeads.length;
         const wonDeals = statusCounts['Deal Won'] + statusCounts['WON'] + statusCounts['Won'] + statusCounts['DEAL WON'];
-        
+
         // NEW APPROACH: Check each lead's latest follow-up date
         let missedCount = 0;
         const today = new Date().toISOString().split('T')[0];
-        
+
         // Check each lead individually
         for (const lead of allLeads) {
             // Skip leads that are already won or not interested
-            if (lead.status === 'Deal Won' || lead.status === 'Not Interested' || 
+            if (lead.status === 'Deal Won' || lead.status === 'Not Interested' ||
                 lead.status === 'Won' || lead.status === 'WON' || lead.status === 'DEAL WON') {
                 continue;
             }
-            
+
             // Get the latest follow-up for this lead
             const [latestFollowup] = await pool.query(`
                 SELECT followup_date, status
@@ -424,30 +465,30 @@ exports.getSalesmanKPI = async (req, res) => {
                 ORDER BY followup_date DESC 
                 LIMIT 1
             `, [lead.id]);
-            
+
             if (latestFollowup.length > 0) {
                 const followup = latestFollowup[0];
                 const followupDate = new Date(followup.followup_date).toISOString().split('T')[0];
-                
-                // Check if follow-up date is past (overdue)
-                if (followupDate < today) {
+
+                // Check if follow-up date is past (overdue) AND not completed
+                if (followupDate < today && (followup.status === 'Pending' || followup.status === 'Missed')) {
                     missedCount++;
                 }
             }
         }
-        
+
         const totalRealMissedCount = missedCount;
-        
+
         // Calculate success rate
         const successRate = totalAssigned > 0 ? ((wonDeals / totalAssigned) * 100).toFixed(1) : '0.0';
-        
+
         const result = {
             total: totalAssigned,
             won: wonDeals,
             missed: totalRealMissedCount,
             successRate: parseFloat(successRate)
         };
-        
+
         res.json(result);
     } catch (err) {
         console.error('KPI CALCULATION ERROR:', err);
@@ -480,7 +521,7 @@ exports.getAllFollowupHistory = async (req, res) => {
             JOIN users u ON f.salesman_id = u.id
             ORDER BY f.followup_date DESC, f.created_at DESC
         `);
-        
+
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -491,13 +532,13 @@ exports.getAllFollowupHistory = async (req, res) => {
 exports.updateFollowupStatus = async (req, res) => {
     const { followupId, status, completionNotes } = req.body;
     const salesmanId = req.user.id;
-    
+
     try {
         await pool.query(
             'UPDATE followups SET status = ?, completion_date = NOW(), completion_notes = ?, updated_at = NOW() WHERE id = ? AND salesman_id = ?',
             [status, completionNotes, followupId, salesmanId]
         );
-        
+
         res.json({ message: `Follow-up marked as ${status}` });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -509,10 +550,10 @@ exports.getFollowupStats = async (req, res) => {
     try {
         const userId = req.user.id;
         const userRole = req.user.role;
-        
+
         let whereClause = userRole === 'admin' ? '' : 'WHERE f.salesman_id = ?';
         let params = userRole === 'admin' ? [] : [userId];
-        
+
         const [stats] = await pool.query(`
             SELECT 
                 COUNT(*) as total_followups,
@@ -524,7 +565,7 @@ exports.getFollowupStats = async (req, res) => {
             FROM followups f
             ${whereClause}
         `, params);
-        
+
         res.json(stats[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -565,7 +606,7 @@ exports.getAllLeadTracking = async (req, res) => {
             GROUP BY l.id, u.id, b.id
             ORDER BY l.created_at DESC
         `);
-        
+
         res.json(leads);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -582,12 +623,21 @@ exports.getLeadDetailedHistory = async (req, res) => {
                 l.*,
                 u.name as assigned_salesman,
                 u.email as salesman_email,
-                u.role as salesman_role
+                u.role as salesman_role,
+                CASE 
+                    WHEN b.id IS NOT NULL THEN JSON_OBJECT(
+                        'amount', b.amount,
+                        'project', b.project,
+                        'bookingDate', b.booking_date
+                    )
+                    ELSE NULL 
+                END as booking_details
             FROM leads l
             LEFT JOIN users u ON l.assigned_to = u.id
+            LEFT JOIN bookings b ON l.id = b.lead_id
             WHERE l.id = ?
         `, [leadId]);
-        
+
         // Get follow-up history
         const [followupHistory] = await pool.query(`
             SELECT 
@@ -606,7 +656,7 @@ exports.getLeadDetailedHistory = async (req, res) => {
             WHERE f.lead_id = ?
             ORDER BY f.followup_date DESC, f.created_at DESC
         `, [leadId]);
-        
+
         // Get booking details if any
         const [bookingDetails] = await pool.query(`
             SELECT 
@@ -617,7 +667,7 @@ exports.getLeadDetailedHistory = async (req, res) => {
             WHERE b.lead_id = ?
             ORDER BY b.created_at DESC
         `, [leadId]);
-        
+
         // Get timeline of all activities
         const [timeline] = await pool.query(`
             SELECT 
@@ -673,7 +723,7 @@ exports.getLeadDetailedHistory = async (req, res) => {
             
             ORDER BY timestamp DESC
         `, [leadId, leadId, leadId, leadId, leadId]);
-        
+
         res.json({
             leadDetails: leadDetails[0] || null,
             followupHistory,
@@ -710,7 +760,7 @@ exports.getLeadTrackingStats = async (req, res) => {
             FROM leads l
             LEFT JOIN bookings b ON l.id = b.lead_id
         `);
-        
+
         // Get pipeline distribution
         const [pipeline] = await pool.query(`
             SELECT 
@@ -734,7 +784,7 @@ exports.getLeadTrackingStats = async (req, res) => {
             ) as pipeline_data
             GROUP BY pipeline_stage
         `);
-        
+
         // Get monthly trends
         const [monthlyTrends] = await pool.query(`
             SELECT 
@@ -749,7 +799,7 @@ exports.getLeadTrackingStats = async (req, res) => {
             GROUP BY DATE_FORMAT(created_at, '%Y-%m')
             ORDER BY month DESC
         `);
-        
+
         res.json({
             overview: stats[0],
             pipeline,
@@ -764,15 +814,15 @@ exports.getLeadTrackingStats = async (req, res) => {
 exports.getHistoryTimeline = async (req, res) => {
     try {
         const { limit = 50, offset = 0, activityType = 'all' } = req.query;
-        
+
         let whereClause = '';
         let params = [];
-        
+
         if (activityType !== 'all') {
             whereClause = 'WHERE activity_type = ?';
             params.push(activityType);
         }
-        
+
         const [timeline] = await pool.query(`
             SELECT 
                 activity_type,
@@ -877,7 +927,7 @@ exports.getHistoryTimeline = async (req, res) => {
             ORDER BY timestamp DESC
             LIMIT ? OFFSET ?
         `, [...params, parseInt(limit), parseInt(offset)]);
-        
+
         // Get activity counts for stats
         const [activityCounts] = await pool.query(`
             SELECT 
@@ -896,7 +946,7 @@ exports.getHistoryTimeline = async (req, res) => {
             ) as activities
             GROUP BY activity_type
         `);
-        
+
         res.json({
             timeline,
             stats: activityCounts,
@@ -915,7 +965,7 @@ exports.getHistoryTimeline = async (req, res) => {
 exports.getRecentActivities = async (req, res) => {
     try {
         const { limit = 20 } = req.query;
-        
+
         const [activities] = await pool.query(`
             SELECT 
                 activity_type,
@@ -992,7 +1042,7 @@ exports.getRecentActivities = async (req, res) => {
             ORDER BY timestamp DESC
             LIMIT ?
         `, [parseInt(limit)]);
-        
+
         res.json(activities);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1003,9 +1053,9 @@ exports.getRecentActivities = async (req, res) => {
 exports.checkAndUpdateMissedFollowups = async (req, res) => {
     try {
         const connection = await pool.getConnection();
-        
+
         await connection.beginTransaction();
-        
+
         // Update all pending follow-ups where due date has passed
         const [result] = await connection.query(`
             UPDATE followups 
@@ -1016,13 +1066,13 @@ exports.checkAndUpdateMissedFollowups = async (req, res) => {
             WHERE status = 'Pending' 
             AND followup_date < CURDATE()
         `);
-        
+
         await connection.commit();
         connection.release();
-        
-        res.json({ 
+
+        res.json({
             message: 'Missed follow-ups updated successfully',
-            updatedCount: result.affectedRows 
+            updatedCount: result.affectedRows
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1059,7 +1109,7 @@ exports.getAllFollowupStatusLeads = async (req, res) => {
             GROUP BY l.id, u.id
             ORDER BY l.created_at DESC
         `);
-        
+
         // For each lead, get detailed follow-up history
         const leadsWithHistory = await Promise.all(
             leads.map(async (lead) => {
@@ -1088,7 +1138,7 @@ exports.getAllFollowupStatusLeads = async (req, res) => {
                     WHERE f.lead_id = ?
                     ORDER BY f.followup_date ASC, f.created_at ASC
                 `, [lead.id]);
-                
+
                 return {
                     ...lead,
                     followupHistory,
@@ -1102,12 +1152,12 @@ exports.getAllFollowupStatusLeads = async (req, res) => {
                 };
             })
         );
-        
+
         // Remove duplicates based on lead ID
-        const uniqueLeads = leadsWithHistory.filter((lead, index, self) => 
+        const uniqueLeads = leadsWithHistory.filter((lead, index, self) =>
             self.findIndex(l => l.id === lead.id) === index
         );
-        
+
         // Get overall statistics
         const [stats] = await pool.query(`
             SELECT 
@@ -1115,7 +1165,7 @@ exports.getAllFollowupStatusLeads = async (req, res) => {
                 SUM(CASE WHEN l.assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned_followup_leads,
                 SUM(CASE WHEN EXISTS (
                     SELECT 1 FROM followups f 
-                    WHERE f.lead_id = l.id AND f.status = 'Pending' AND f.followup_date < CURDATE()
+                    WHERE f.lead_id = l.id AND (f.status = 'Pending' AND f.followup_date < CURDATE() OR f.status = 'Missed')
                 ) THEN 1 ELSE 0 END) as overdue_followup_leads,
                 SUM(CASE WHEN EXISTS (
                     SELECT 1 FROM followups f 
@@ -1125,17 +1175,17 @@ exports.getAllFollowupStatusLeads = async (req, res) => {
             FROM leads l
             WHERE l.status = 'Follow-up'
         `);
-        
+
         // Calculate correct summary from unique leads
         const summary = {
             totalLeads: uniqueLeads.length,
             totalFollowups: uniqueLeads.reduce((acc, lead) => acc + parseInt(lead.total_followups || 0), 0),
             pendingFollowups: uniqueLeads.reduce((acc, lead) => acc + parseInt(lead.pending_followups || 0), 0),
-            overdueFollowups: uniqueLeads.filter(lead => 
-                lead.followupHistory.some(f => f.urgency_status === 'overdue')
+            overdueFollowups: uniqueLeads.filter(lead =>
+                lead.followupHistory.some(f => f.urgency_status === 'overdue' || f.urgency_status === 'missed')
             ).length
         };
-        
+
         res.json({
             leads: uniqueLeads,
             stats: stats[0],
@@ -1151,13 +1201,22 @@ exports.getSalesmanLeadsById = async (req, res) => {
     const { salesmanId } = req.params;
     try {
         const [leads] = await pool.query(`
-            SELECT l.*, u.name as assigned_salesman, u.email as salesman_email
+            SELECT l.*, u.name as assigned_salesman, u.email as salesman_email,
+            CASE 
+                WHEN b.id IS NOT NULL THEN JSON_OBJECT(
+                    'amount', b.amount,
+                    'project', b.project,
+                    'bookingDate', b.booking_date
+                )
+                ELSE NULL 
+            END as booking_details
             FROM leads l
             LEFT JOIN users u ON l.assigned_to = u.id
+            LEFT JOIN bookings b ON l.id = b.lead_id
             WHERE l.assigned_to = ?
             ORDER BY l.created_at DESC
         `, [salesmanId]);
-        
+
         res.json(leads);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1185,7 +1244,7 @@ exports.getTodayFollowupsById = async (req, res) => {
             AND f.status = 'Pending'
             ORDER BY f.followup_date ASC
         `, [salesmanId]);
-        
+
         res.json(followups);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1211,7 +1270,7 @@ exports.getSalesmanFollowupHistoryById = async (req, res) => {
             WHERE f.salesman_id = ?
             ORDER BY f.followup_date DESC, f.created_at DESC
         `, [salesmanId]);
-        
+
         res.json(followups);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1248,19 +1307,19 @@ exports.sendWhatsAppGreeting = async (req, res) => {
 
         // Create personalized greeting message from email content
         let greetingMessage = `Hello 👋\nWelcome ${leadData.sender_name}!\n`;
-        
+
         // Add subject if available
         if (leadData.subject && leadData.subject.trim()) {
             greetingMessage += `Regarding: ${leadData.subject}\n\n`;
         }
-        
+
         // Add relevant part of email body (first 200 characters)
         if (leadData.body && leadData.body.trim()) {
             const cleanBody = leadData.body.replace(/\n+/g, ' ').trim();
             const shortBody = cleanBody.length > 200 ? cleanBody.substring(0, 200) + '...' : cleanBody;
             greetingMessage += `Message: ${shortBody}\n\n`;
         }
-        
+
         greetingMessage += `Our salesman will reach you soon!!\n\nThanks for reaching out. Our team will contact you shortly.`;
 
         // Send WhatsApp greeting
@@ -1274,12 +1333,12 @@ exports.sendWhatsAppGreeting = async (req, res) => {
         if (result.success) {
             // Mark as sent in database
             await whatsappService.markGreetingAsSent(leadId);
-            res.json({ 
+            res.json({
                 message: 'WhatsApp greeting sent successfully',
                 result: result
             });
         } else {
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Failed to send WhatsApp greeting',
                 details: result.error
             });
@@ -1294,7 +1353,7 @@ exports.sendWhatsAppGreeting = async (req, res) => {
 exports.getWhatsAppStats = async (req, res) => {
     try {
         const stats = await whatsappService.getStats();
-        
+
         // Get additional database statistics
         const [dbStats] = await pool.query(`
             SELECT 
@@ -1350,19 +1409,19 @@ exports.resendWhatsAppGreeting = async (req, res) => {
 
         // Create personalized greeting message from email content
         let greetingMessage = `Hello 👋\nWelcome ${leadData.sender_name}!\n`;
-        
+
         // Add subject if available
         if (leadData.subject && leadData.subject.trim()) {
             greetingMessage += `Regarding: ${leadData.subject}\n\n`;
         }
-        
+
         // Add relevant part of email body (first 200 characters)
         if (leadData.body && leadData.body.trim()) {
             const cleanBody = leadData.body.replace(/\n+/g, ' ').trim();
             const shortBody = cleanBody.length > 200 ? cleanBody.substring(0, 200) + '...' : cleanBody;
             greetingMessage += `Message: ${shortBody}\n\n`;
         }
-        
+
         greetingMessage += `Our salesman will reach you soon!!\n\nThanks for reaching out. Our team will contact you shortly.`;
 
         // Send WhatsApp greeting
@@ -1376,12 +1435,12 @@ exports.resendWhatsAppGreeting = async (req, res) => {
         if (result.success) {
             // Mark as sent in database
             await whatsappService.markGreetingAsSent(leadId);
-            res.json({ 
+            res.json({
                 message: 'WhatsApp greeting resent successfully',
                 result: result
             });
         } else {
-            res.status(500).json({ 
+            res.status(500).json({
                 error: 'Failed to resend WhatsApp greeting',
                 details: result.error
             });

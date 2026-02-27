@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, MessageSquare, Target } from 'lucide-react';
+import { Phone, Calendar, CheckCircle, XCircle, Clock, Bell, ExternalLink, MessageSquare, Target, Trophy } from 'lucide-react';
 
 // Rupee Icon Component
 const RupeeIcon = ({ size = 16, className = "" }) => (
@@ -25,13 +25,16 @@ const SalesmanDashboard = () => {
     const [leads, setLeads] = useState([]);
     const [todayFollowups, setTodayFollowups] = useState([]);
     const [overdueFollowups, setOverdueFollowups] = useState([]);
+    const [upcomingFollowups, setUpcomingFollowups] = useState([]);
     const [showReminder, setShowReminder] = useState(false);
     const [selectedLead, setSelectedLead] = useState(null);
     const [statusUpdate, setStatusUpdate] = useState({
         status: '',
         remarks: '',
         followupDate: '',
-        bookingDetails: { amount: '', project: '', bookingDate: '' }
+        bookingDetails: { amount: '', project: '', bookingDate: '' },
+        notInterestedMainReason: '',
+        notInterestedReason: ''
     });
     const [activeTab, setActiveTab] = useState('active');
     const [viewMessage, setViewMessage] = useState(null);
@@ -78,19 +81,32 @@ const SalesmanDashboard = () => {
 
     const hasMissedFollowup = (lead) => {
         // Check if lead has any missed follow-ups
-        return overdueFollowups.some(f => f.lead_id === lead.id);
+        return overdueFollowups.some(f => Number(f.lead_id) === Number(lead.id));
+    };
+
+    const hasTodayFollowup = (lead) => {
+        return todayFollowups.some(f => Number(f.lead_id) === Number(lead.id));
+    };
+
+    const hasFutureFollowup = (lead) => {
+        return upcomingFollowups.some(f => Number(f.lead_id) === Number(lead.id));
     };
 
     const getNextFollowupDate = (lead) => {
+        // Check overdue followups
+        const overdueFollowup = overdueFollowups.find(f => f.lead_id === lead.id);
+        if (overdueFollowup) {
+            return new Date(overdueFollowup.followup_date).toLocaleDateString();
+        }
         // Get the next follow-up date from today's followups
         const followup = todayFollowups.find(f => f.lead_id === lead.id);
         if (followup) {
             return new Date(followup.followup_date).toLocaleDateString();
         }
-        // Check overdue followups
-        const overdueFollowup = overdueFollowups.find(f => f.lead_id === lead.id);
-        if (overdueFollowup) {
-            return new Date(overdueFollowup.followup_date).toLocaleDateString();
+        // Check upcoming followups
+        const upcomingFollowup = upcomingFollowups.find(f => f.lead_id === lead.id);
+        if (upcomingFollowup) {
+            return new Date(upcomingFollowup.followup_date).toLocaleDateString();
         }
         return null;
     };
@@ -130,16 +146,20 @@ const SalesmanDashboard = () => {
 
             console.log('All followups fetched:', res.data);
 
-            // Filter for overdue follow-ups (due date before today and still pending)
+            // Filter for overdue follow-ups (due date before today and still pending OR already marked Missed)
             const overdue = res.data.filter(f => {
                 const followupDate = new Date(f.followup_date).toISOString().split('T')[0];
-                const isOverdue = followupDate < today && f.status === 'Pending';
-                console.log(`Followup ${f.id}: ${followupDate} vs ${today}, status: ${f.status} = ${isOverdue}`);
-                return isOverdue;
+                return followupDate < today && (f.status === 'Pending' || f.status === 'Missed');
+            });
+
+            const upcoming = res.data.filter(f => {
+                const followupDate = new Date(f.followup_date).toISOString().split('T')[0];
+                return followupDate > today && f.status === 'Pending';
             });
 
             console.log('Overdue followups:', overdue);
             setOverdueFollowups(overdue);
+            setUpcomingFollowups(upcoming);
         } catch (error) {
             console.error('Error fetching overdue followups:', error);
             if (error.response?.status === 401) {
@@ -215,9 +235,18 @@ const SalesmanDashboard = () => {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             setSelectedLead(null);
+            setStatusUpdate({
+                status: '',
+                remarks: '',
+                followupDate: '',
+                bookingDetails: { amount: '', project: '', bookingDate: '' },
+                notInterestedMainReason: '',
+                notInterestedReason: ''
+            });
             fetchLeads();
             fetchTodayFollowups();
             fetchKPIData();
+            fetchOverdueFollowups();
             alert('Lead status successfully updated!');
         } catch (error) {
             console.error(error);
@@ -229,12 +258,43 @@ const SalesmanDashboard = () => {
         }
     };
 
-    // Filter leads for different tabs
+    // Filter leads for different tabs and prioritize missed ones
     const filteredLeads = leads.filter(l => {
         if (activeTab === 'active') return ['Assigned', 'Follow-up'].includes(l.status);
         if (activeTab === 'won') return l.status === 'Deal Won';
         if (activeTab === 'closed') return l.status === 'Not Interested';
         return true;
+    }).sort((a, b) => {
+        const aMissed = a.status === 'Follow-up' && hasMissedFollowup(a);
+        const bMissed = b.status === 'Follow-up' && hasMissedFollowup(b);
+        if (aMissed && !bMissed) return -1;
+        if (!aMissed && bMissed) return 1;
+        if (aMissed && bMissed) {
+            const getOverdueTime = (lead) => {
+                const f = overdueFollowups.find(f => Number(f.lead_id) === Number(lead.id));
+                return f ? new Date(f.followup_date).getTime() : 0;
+            };
+            return getOverdueTime(a) - getOverdueTime(b);
+        }
+
+        const aToday = a.status === 'Follow-up' && hasTodayFollowup(a);
+        const bToday = b.status === 'Follow-up' && hasTodayFollowup(b);
+        if (aToday && !bToday) return -1;
+        if (!aToday && bToday) return 1;
+
+        const aFuture = a.status === 'Follow-up' && hasFutureFollowup(a);
+        const bFuture = b.status === 'Follow-up' && hasFutureFollowup(b);
+        if (aFuture && !bFuture) return -1;
+        if (!aFuture && bFuture) return 1;
+        if (aFuture && bFuture) {
+            const getFutureTime = (lead) => {
+                const f = upcomingFollowups.find(f => Number(f.lead_id) === Number(lead.id));
+                return f ? new Date(f.followup_date).getTime() : 0;
+            };
+            return getFutureTime(a) - getFutureTime(b);
+        }
+
+        return 0;
     });
 
     const stats = {
@@ -274,19 +334,19 @@ const SalesmanDashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-3xl border border-blue-100 shadow-sm">
                     <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">TOTAL</div>
-                    <div className="text-3xl font-black text-blue-600">{kpiData.total} <span className="text-sm font-medium text-gray-400">Leads Assigned</span></div>
+                    <div className="text-3xl font-black text-blue-600">{leads.length || kpiData.total} <span className="text-sm font-medium text-gray-400">Leads Assigned</span></div>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-green-100 shadow-sm">
                     <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">WON</div>
-                    <div className="text-3xl font-black text-green-600">{kpiData.won} <span className="text-sm font-medium text-gray-400">Deals Closed</span></div>
+                    <div className="text-3xl font-black text-green-600">{stats.won || kpiData.won} <span className="text-sm font-medium text-gray-400">Deals Closed</span></div>
                 </div>
-                <div className="bg-white p-6 rounded-3xl border border-red-100 shadow-sm">
+                <div className={`p-6 rounded-3xl border shadow-sm transition-all ${(overdueFollowups.length || kpiData.missed) > 0 ? 'bg-red-50 border-red-200 animate-pulse ring-2 ring-red-100' : 'bg-white border-red-100'}`}>
                     <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">MISSED</div>
-                    <div className="text-3xl font-black text-red-600">{kpiData.missed} <span className="text-sm font-medium text-gray-400">Overdue Follow-ups</span></div>
+                    <div className={`text-3xl font-black ${(overdueFollowups.length || kpiData.missed) > 0 ? 'text-red-700' : 'text-red-600'}`}>{overdueFollowups.length || kpiData.missed} <span className="text-sm font-medium text-gray-400">Overdue Follow-ups</span></div>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-purple-100 shadow-sm">
                     <div className="text-gray-500 text-sm font-bold uppercase tracking-widest mb-1">RATE</div>
-                    <div className="text-3xl font-black text-purple-600">{kpiData.successRate}% <span className="text-sm font-medium text-gray-400">Success Rate</span></div>
+                    <div className="text-3xl font-black text-purple-600">{leads.length > 0 ? ((stats.won / leads.length) * 100).toFixed(1) : kpiData.successRate}% <span className="text-sm font-medium text-gray-400">Success Rate</span></div>
                 </div>
             </div>
 
@@ -321,30 +381,26 @@ const SalesmanDashboard = () => {
                                     <td colSpan="5" className="px-6 py-12 text-center text-gray-300 italic font-medium">No {activeTab} leads available for processing.</td>
                                 </tr>
                             ) : filteredLeads.map(lead => {
+                                const booking = lead.booking_details ? (typeof lead.booking_details === 'string' ? JSON.parse(lead.booking_details) : lead.booking_details) : null;
                                 const hasTodayFollowup = todayFollowups.some(f => f.lead_id === lead.id);
                                 const hasMissedFollowupLocal = overdueFollowups.some(f => f.lead_id === lead.id);
                                 console.log(`Lead ${lead.id}: hasMissedFollowupLocal = ${hasMissedFollowupLocal}, overdueFollowups = ${overdueFollowups.length}`);
                                 return (
-                                    <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' :
-                                        hasMissedFollowupLocal ? 'bg-red-50/50 border-l-4 border-red-500' :
+                                    <tr key={lead.id} className={`hover:bg-blue-50/20 transition-all group ${hasMissedFollowup(lead) ? 'bg-red-50 border-l-[6px] border-red-600 shadow-[inset_10px_0_10px_-10px_rgba(220,38,38,0.2)]' :
+                                        hasTodayFollowup ? 'bg-emerald-50/30 border-l-4 border-emerald-500' :
                                             (lead.subject && (lead.subject.toLowerCase().includes('test 10') || lead.subject.toLowerCase().includes('test 11') || lead.subject.toLowerCase().includes('test10') || lead.subject.toLowerCase().includes('test11'))) ? 'bg-red-100 border-l-4 border-red-500' : ''
                                         }`}>
                                         <td className="px-6 py-4">
                                             <div className="flex items-start justify-between">
                                                 <div className="flex items-center space-x-3">
                                                     <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-600 font-black text-lg">
-                                                        {(lead.customer_name || lead.sender_name)?.[0] || 'A'}
+                                                        {(lead.customer_name && lead.customer_name !== 'unknown client') ? lead.customer_name[0] : 'U'}
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center space-x-2">
-                                                            <div className="font-extrabold text-gray-900 text-sm">{lead.customer_name || lead.sender_name || 'Anonymous'}</div>
-                                                            {hasMissedFollowupLocal && (
-                                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-black bg-red-100 text-red-800 border border-red-200 animate-pulse">
-                                                                    MISSED
-                                                                </span>
-                                                            )}
+                                                            <div className="font-extrabold text-gray-900 text-sm">{lead.customer_name || 'unknown client'}</div>
                                                         </div>
-                                                        <div className="text-xs text-gray-400">{lead.customer_email && lead.customer_email !== 'no email' ? lead.customer_email : lead.sender_email}</div>
+                                                        <div className="text-xs text-gray-400">{lead.customer_email || 'no email'}</div>
                                                     </div>
                                                 </div>
                                                 {hasTodayFollowup && (
@@ -417,8 +473,8 @@ const SalesmanDashboard = () => {
                                                     {lead.status}
                                                 </span>
                                                 {lead.status === 'Follow-up' && hasMissedFollowup(lead) && (
-                                                    <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
-                                                        MISSED
+                                                    <div className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black bg-red-600 text-white border border-red-700 animate-pulse shadow-lg shadow-red-200 uppercase tracking-tighter">
+                                                        🚨 OVERDUE MISSED
                                                     </div>
                                                 )}
                                                 {lead.status === 'Follow-up' && getNextFollowupDate(lead) && (
@@ -430,20 +486,54 @@ const SalesmanDashboard = () => {
                                                         {hasMissedFollowup(lead) && ' (Overdue)'}
                                                     </div>
                                                 )}
+                                                {lead.status === 'Won' && booking && (
+                                                    <div className="text-[10px] mt-2 p-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100 flex flex-col shadow-sm">
+                                                        <span className="font-black flex items-center space-x-1 mb-1 text-emerald-800">
+                                                            <CheckCircle size={10} className="text-emerald-500" />
+                                                            <span className="uppercase tracking-wide">{booking.project || 'General Booking'}</span>
+                                                        </span>
+                                                        <div className="flex justify-between items-center mt-1">
+                                                            <span className="font-bold">₹{parseFloat(booking.amount || 0).toLocaleString()}</span>
+                                                            <span className="italic text-emerald-600 font-medium">
+                                                                {booking.bookingDate ? new Date(booking.bookingDate).toLocaleDateString() : 'N/A'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {lead.status === 'Not Interested' && (lead.not_interested_main_reason || lead.not_interested_reason) && (
+                                                    <div className="text-[10px] mt-2 p-2 bg-red-50 text-red-700 rounded-lg border border-red-100 flex flex-col shadow-sm">
+                                                        <span className="font-black flex items-center space-x-1 mb-1 text-red-800">
+                                                            <XCircle size={10} className="text-red-500" />
+                                                            <span className="uppercase tracking-wide">{lead.not_interested_main_reason}</span>
+                                                        </span>
+                                                        {lead.not_interested_main_reason === 'Other' && lead.not_interested_reason && (
+                                                            <span className="italic text-red-600 font-medium leading-tight">"{lead.not_interested_reason}"</span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex justify-center space-x-2">
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedLead(lead);
-                                                        setStatusUpdate({ ...statusUpdate, status: lead.status });
-                                                    }}
-                                                    className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
-                                                >
-                                                    <ExternalLink size={12} />
-                                                    <span>Update</span>
-                                                </button>
+                                                {lead.status !== 'Deal Won' && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedLead(lead);
+                                                            setStatusUpdate({
+                                                                status: lead.status,
+                                                                remarks: '',
+                                                                followupDate: '',
+                                                                bookingDetails: { amount: '', project: '', bookingDate: '' },
+                                                                notInterestedMainReason: '',
+                                                                notInterestedReason: ''
+                                                            });
+                                                        }}
+                                                        className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-black transition-all shadow-sm flex items-center space-x-1.5"
+                                                    >
+                                                        <ExternalLink size={12} />
+                                                        <span>Update</span>
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => fetchLeadFollowupHistory(lead.id)}
                                                     className="text-amber-600 hover:text-amber-800 transition-colors"
@@ -468,7 +558,7 @@ const SalesmanDashboard = () => {
                         <div className="flex justify-between items-start mb-8">
                             <div>
                                 <h2 className="text-3xl font-black text-gray-900 mb-2">Lead Handler</h2>
-                                <p className="text-gray-500 font-medium">Customer: <span className="text-gray-900 font-bold">{selectedLead.customer_name || selectedLead.sender_name || 'Anonymous'}</span></p>
+                                <p className="text-gray-500 font-medium">Customer: <span className="text-gray-900 font-bold">{selectedLead.customer_name || 'unknown client'}</span></p>
                             </div>
                             <button onClick={() => setSelectedLead(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-3 rounded-2xl transition hover:rotate-90">
                                 <XCircle size={28} />
@@ -501,6 +591,47 @@ const SalesmanDashboard = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            {statusUpdate.status === 'Not Interested' && (
+                                <div className="space-y-6 animate-in p-8 bg-red-50/50 rounded-[32px] border border-red-100">
+                                    <h3 className="font-black text-red-800 flex items-center space-x-3">
+                                        <XCircle size={24} />
+                                        <span>Specify Reason for Disinterest</span>
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-6">
+                                        <div>
+                                            <label className="block text-xs font-bold text-red-700 uppercase mb-2">Primary Reason</label>
+                                            <select
+                                                className="w-full p-4 bg-white border-2 border-red-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-400/20 focus:border-red-400 font-bold appearance-none cursor-pointer"
+                                                value={statusUpdate.notInterestedMainReason}
+                                                onChange={(e) => setStatusUpdate({ ...statusUpdate, notInterestedMainReason: e.target.value })}
+                                                required
+                                            >
+                                                <option value="">Select a reason</option>
+                                                <option value="Too Expensive">Too Expensive</option>
+                                                <option value="Location Issue">Location Issue</option>
+                                                <option value="Property Size">Property Size</option>
+                                                <option value="Not Ready to Buy">Not Ready to Buy</option>
+                                                <option value="Already Bought Elsewhere">Already Bought Elsewhere</option>
+                                                <option value="Investment not suitable">Investment not suitable</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        {statusUpdate.notInterestedMainReason === 'Other' && (
+                                            <div className="animate-in">
+                                                <label className="block text-xs font-bold text-red-700 uppercase mb-2">Detailed Reason</label>
+                                                <textarea
+                                                    className="w-full p-4 bg-white border-2 border-red-100 rounded-2xl outline-none focus:ring-4 focus:ring-red-400/20 focus:border-red-400 font-medium" rows="3"
+                                                    placeholder="Type the customer's specific reason here..."
+                                                    value={statusUpdate.notInterestedReason}
+                                                    onChange={(e) => setStatusUpdate({ ...statusUpdate, notInterestedReason: e.target.value })}
+                                                    required
+                                                ></textarea>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {statusUpdate.status === 'Follow-up' && (
                                 <div className="space-y-6 animate-in p-8 bg-yellow-50/50 rounded-[32px] border border-yellow-100">
@@ -575,7 +706,7 @@ const SalesmanDashboard = () => {
                             )}
 
                             <button type="submit" className="w-full py-5 bg-gray-900 text-white rounded-[24px] font-black text-xl hover:bg-black transition-all shadow-2xl hover:translate-y-[-2px] active:scale-95">
-                                Submit Case Result
+                                Submit
                             </button>
                         </form>
                     </div>
@@ -609,8 +740,8 @@ const SalesmanDashboard = () => {
                                     {todayFollowups.map(f => (
                                         <tr key={f.id} className="bg-gray-50/50 hover:bg-red-50/30 transition-all rounded-3xl overflow-hidden group">
                                             <td className="px-6 py-5 rounded-l-[24px]">
-                                                <div className="font-extrabold text-gray-900 text-lg">{f.customer_name || f.sender_name || 'Anonymous'}</div>
-                                                <div className="text-gray-400 text-sm font-medium">{f.customer_email && f.customer_email !== 'no email' ? f.customer_email : f.sender_email}</div>
+                                                <div className="font-extrabold text-gray-900 text-lg">{f.customer_name || 'unknown client'}</div>
+                                                <div className="text-gray-400 text-sm font-medium">{f.customer_email || 'no email'}</div>
                                             </td>
                                             <td className="px-6 py-5">
                                                 <div className="text-xs font-bold text-red-600 bg-red-100 flex items-center space-x-1.5 px-3 py-1 rounded-full w-fit mb-2">
@@ -625,7 +756,14 @@ const SalesmanDashboard = () => {
                                                         const lead = leads.find(l => l.id === f.lead_id);
                                                         if (lead) {
                                                             setSelectedLead(lead);
-                                                            setStatusUpdate({ ...statusUpdate, status: lead.status });
+                                                            setStatusUpdate({
+                                                                status: lead.status,
+                                                                remarks: '',
+                                                                followupDate: '',
+                                                                bookingDetails: { amount: '', project: '', bookingDate: '' },
+                                                                notInterestedMainReason: '',
+                                                                notInterestedReason: ''
+                                                            });
                                                             setShowReminder(false);
                                                         }
                                                     }}
@@ -669,7 +807,7 @@ const SalesmanDashboard = () => {
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-black text-gray-900 leading-tight">Client Requirement</h3>
-                                    <p className="text-gray-500 font-medium text-sm">From: <span className="text-blue-600 font-bold">{viewMessage.customer_name || viewMessage.sender_name || 'Anonymous'}</span></p>
+                                    <p className="text-gray-500 font-medium text-sm">Customer: <span className="text-blue-600 font-bold">{viewMessage.customer_name || 'unknown client'}</span></p>
                                 </div>
                             </div>
                             <button onClick={() => setViewMessage(null)} className="bg-gray-100 text-gray-400 hover:text-gray-600 p-3 rounded-2xl transition hover:rotate-90">
@@ -694,7 +832,14 @@ const SalesmanDashboard = () => {
                             <button
                                 onClick={() => {
                                     setSelectedLead(viewMessage);
-                                    setStatusUpdate({ ...statusUpdate, status: viewMessage.status });
+                                    setStatusUpdate({
+                                        status: viewMessage.status,
+                                        remarks: '',
+                                        followupDate: '',
+                                        bookingDetails: { amount: '', project: '', bookingDate: '' },
+                                        notInterestedMainReason: '',
+                                        notInterestedReason: ''
+                                    });
                                     setViewMessage(null);
                                 }}
                                 className="flex-1 py-4 bg-gray-900 text-white rounded-2xl font-black text-lg hover:bg-black transition-all shadow-xl flex items-center justify-center space-x-3"
@@ -747,6 +892,30 @@ const SalesmanDashboard = () => {
                                     <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Follow-ups</span>
                                     <p className="font-bold text-gray-900 mt-1">{selectedLeadHistory.followupHistory?.length || 0}</p>
                                 </div>
+                                {selectedLeadHistory.leadDetails?.status === 'Deal Won' && (
+                                    <div className="col-span-full mt-4 p-5 bg-emerald-600 rounded-3xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-2xl shadow-emerald-200 border-4 border-white">
+                                        <div className="flex items-center space-x-5">
+                                            <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/30">
+                                                <Trophy size={32} className="text-white" />
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-black text-emerald-100 uppercase tracking-[0.2em] mb-1 opacity-80">Mission Accomplished</div>
+                                                <h4 className="font-black text-2xl leading-tight">
+                                                    {selectedLeadHistory.leadDetails?.booking_details?.project || 'General Booking'}
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/10 backdrop-blur-xl p-4 rounded-2xl border border-white/20 sm:text-right flex flex-col justify-center min-w-[150px]">
+                                            <span className="text-[10px] font-black text-emerald-100 uppercase tracking-widest block opacity-70">Payout Value</span>
+                                            <div className="text-2xl font-black">
+                                                ₹{parseFloat(selectedLeadHistory.leadDetails?.booking_details?.amount || 0).toLocaleString()}
+                                            </div>
+                                            <div className="text-[10px] font-bold text-emerald-200 italic mt-1 uppercase tracking-tighter">
+                                                Closed on {selectedLeadHistory.leadDetails?.booking_details?.bookingDate ? new Date(selectedLeadHistory.leadDetails.booking_details.bookingDate).toLocaleDateString() : 'N/A'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

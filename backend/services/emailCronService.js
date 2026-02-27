@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { fetchAllEmailsUltimate } = require('../ultimateEmailFetch');
+const { fetchEmails } = require('./emailService');
 
 const logFile = path.join(__dirname, '../logs/email-cron.log');
 function log(msg) {
@@ -39,7 +39,7 @@ class EmailCronService {
         }
 
         console.log('🕐 Starting email fetch cron job (every 5 minutes)');
-        
+
         // Schedule email fetching every 5 minutes
         this.task = cron.schedule('*/5 * * * *', async () => {
             console.log(`\n[${new Date().toLocaleTimeString()}] 🔄 Scheduled email fetch...`);
@@ -50,10 +50,10 @@ class EmailCronService {
         });
 
         this.task.start();
-        
+
         // Run immediately on start to get current emails
         this.runOnce();
-        
+
         console.log('✅ Email cron job started successfully');
     }
 
@@ -66,12 +66,12 @@ class EmailCronService {
     async fetchWithRetry() {
         try {
             log('🔄 Starting email fetch...');
-            const result = await fetchAllEmailsUltimate();
-            log(`✅ Scheduled fetch completed: ${result.processed} new, ${result.skipped} skipped`);
+            const result = await fetchEmails();
+            log(`✅ Scheduled fetch completed`);
             this.retryCount = 0; // Reset retry count on success
         } catch (error) {
             log(`❌ Scheduled fetch failed (attempt ${this.retryCount + 1}/${this.maxRetries}): ${error.message}`);
-            
+
             this.retryCount++;
             if (this.retryCount < this.maxRetries) {
                 console.log(`🔄 Retrying in 30 seconds...`);
