@@ -5,7 +5,7 @@ A high-performance, production-ready CRM designed for real estate and service-ba
 ## Core Features
 
 ### 1. Intelligent Lead Capture (Automation)
-- **20-Minute Performance Window**: Optimized to scan only emails received in the last 20 minutes, preventing performance degradation in large inboxes.
+- **10-Minute Performance Window**: Optimized to scan only emails received in the last 10 minutes, preventing performance degradation in large inboxes.
 - **24-Hour Smart Deduplication**: Prevents exact duplicates (Email + Subject) from being processed within a rolling 24-hour window.
 - **Intelligent Sourcing**: Automatically identifies lead origins (MagicBricks, Housing.com, 99Acres, GitHub, Vercel, EmailJS, etc.)
 
@@ -166,10 +166,9 @@ WHATSAPP_GREETING_TEMPLATE=hello_world
 ## Key Features & Improvements
 
 ### Recent Updates
-- **20-Minute Scan Optimization**: Drastic performance improvement by only scanning the most recent emails.
-- **Smart Body Extraction Engine**: Prioritizes lead details (Name, Email, Mobile) from the email body text.
-- **Automated "Unknown" Handling**: Handles missing lead names with sequential numbering (unknown clientX).
 - **Dashboard Data Prioritization**: Dashboard now displays "True Lead" info extracted from body over email headers.
+- **Enhanced Lead Loss Recovery**: Introduced a mandatory "Lead Lost Reason" system for 'Not Interested' status. Sales personnel can choose from primary reasons (Expensive, Location, etc.) or provide detailed custom feedback using the "Other" option.
+- **10-Minute Scan Optimization**: Drastic performance improvement by only scanning the most recent emails.
 - **Lead Deletion Maintenance**: Added capability to clear leads for database reset/testing.
 - **Multi-Layer Deduplication**: 
   - **Identical Lead Prevention**: Prevents duplicate email/subjects within 24 hours.

@@ -61,14 +61,14 @@ const fetchEmails = () => {
                     return reject(err);
                 }
 
-                // Calculate 20 minutes ago
-                const last20Min = new Date();
-                last20Min.setMinutes(last20Min.getMinutes() - 20);
+                // Calculate 10 minutes ago
+                const last10Min = new Date();
+                last10Min.setMinutes(last10Min.getMinutes() - 10);
 
-                console.log(`Searching for emails received since: ${last20Min.toLocaleString()}`);
+                console.log(`Searching for emails received since: ${last10Min.toLocaleString()}`);
 
                 // Fetch emails from inbox (narrowed by date)
-                imap.search([['SINCE', last20Min]], (err, results) => {
+                imap.search([['SINCE', last10Min]], (err, results) => {
                     if (err) {
                         console.error('Search error:', err);
                         imap.end();
